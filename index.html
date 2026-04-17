@@ -1,0 +1,1752 @@
+﻿<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>图片转WORD</title>
+  <style>
+    :root {
+      --bg: #f0f2f5;
+      --panel: #ffffff;
+      --line: #e2e8f0;
+      --line-strong: #94a3b8;
+      --text: #0f172a;
+      --muted: #64748b;
+      --primary: #2563eb;
+      --primary-hover: #1d4ed8;
+      --primary-light: #dbeafe;
+      --primary-glow: rgba(37, 99, 235, 0.15);
+      --danger: #ef4444;
+      --danger-hover: #dc2626;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --radius: 10px;
+      --radius-sm: 6px;
+      --radius-lg: 14px;
+      --shadow-sm: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+      --shadow-md: 0 4px 12px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04);
+      --shadow-lg: 0 12px 32px rgba(0,0,0,0.1), 0 4px 8px rgba(0,0,0,0.06);
+      --shadow-glow: 0 0 0 3px var(--primary-glow);
+      --transition: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      --header-bg: #1e3a5f;
+      --table-head-bg: #aec6db;
+      --table-head-border: #6f8aa3;
+      --table-cell-border: #3e4a57;
+      --group-basic: #efefef;
+      --group-melt: #dbe7cf;
+      --group-warm: #f4dccb;
+      --group-flex: #f6ebbf;
+      --group-impact: #b5c3e0;
+      --group-extra: #edf1f6;
+    }
+
+    * { box-sizing: border-box; margin: 0; }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Inter", "SF Pro Display", -apple-system, "Microsoft YaHei", sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    body {
+      padding: 12px;
+      overflow: hidden;
+    }
+
+    /* ─── Layout ─── */
+    .app {
+      display: grid;
+      grid-template-columns: 340px 1fr;
+      gap: 12px;
+      width: 100%;
+      height: calc(100vh - 24px);
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-sm);
+      overflow: hidden;
+      min-height: 0;
+      transition: box-shadow var(--transition);
+    }
+
+    .panel:hover {
+      box-shadow: var(--shadow-md);
+    }
+
+    .sidebar, .main {
+      padding: 16px;
+      min-height: 0;
+    }
+
+    .sidebar {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      overflow: auto;
+    }
+
+    .main {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      overflow: hidden;
+    }
+
+    /* ─── Sections ─── */
+    .section {
+      border: 1px solid #e8e8e8;
+      border-radius: 0;
+      padding: 14px;
+      background: #fff;
+      transition: border-color var(--transition);
+    }
+
+    .section:hover {
+      border-color: #cbd5e1;
+    }
+
+    .section h2 {
+      margin: 0 0 12px;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      color: #333;
+      text-transform: uppercase;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .section h2::before {
+      content: '';
+      width: 3px;
+      height: 14px;
+      background: #409eff;
+      border-radius: 0;
+    }
+
+    .section-title {
+      font-size: 12px;
+      font-weight: 700;
+      color: #1e293b;
+    }
+
+    /* ─── Fields ─── */
+    .field {
+      margin-bottom: 12px;
+    }
+
+    .field:last-child {
+      margin-bottom: 0;
+    }
+
+    .field label {
+      display: block;
+      margin-bottom: 6px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.01em;
+    }
+
+    input[type="url"],
+    select {
+      width: 100%;
+      height: 40px;
+      border: 1.5px solid var(--line);
+      border-radius: var(--radius-sm);
+      padding: 0 12px;
+      font: inherit;
+      font-size: 13px;
+      color: inherit;
+      background: #fff;
+      transition: border-color var(--transition), box-shadow var(--transition);
+      outline: none;
+    }
+
+    input[type="url"]:focus,
+    select:focus {
+      border-color: var(--primary);
+      box-shadow: var(--shadow-glow);
+    }
+
+    input[type="url"]:hover:not(:focus),
+    select:hover:not(:focus) {
+      border-color: var(--line-strong);
+    }
+
+    .row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+
+    /* ─── Buttons ─── */
+    button {
+      height: 40px;
+      padding: 0 16px;
+      border: 1.5px solid var(--line);
+      border-radius: var(--radius-sm);
+      font: inherit;
+      font-size: 13px;
+      font-weight: 600;
+      background: #fff;
+      color: var(--text);
+      cursor: pointer;
+      transition: all var(--transition);
+      position: relative;
+      overflow: hidden;
+    }
+
+    button:hover:not(:disabled) {
+      border-color: var(--line-strong);
+      background: #f8fafc;
+      transform: translateY(-1px);
+      box-shadow: var(--shadow-sm);
+    }
+
+    button:active:not(:disabled) {
+      transform: translateY(0);
+      box-shadow: none;
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .btn-primary {
+      border-color: var(--primary);
+      background: linear-gradient(135deg, var(--primary), #3b82f6);
+      color: #fff;
+      box-shadow: 0 2px 8px rgba(37, 99, 235, 0.3);
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      border-color: var(--primary-hover);
+      background: linear-gradient(135deg, var(--primary-hover), var(--primary));
+      box-shadow: 0 4px 16px rgba(37, 99, 235, 0.4);
+    }
+
+    .btn-danger {
+      color: var(--danger);
+      border-color: #fecaca;
+    }
+
+    .btn-danger:hover:not(:disabled) {
+      background: #fef2f2;
+      border-color: var(--danger);
+    }
+
+    .btn-icon {
+      width: 40px;
+      padding: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* ─── File Upload ─── */
+    .file-box {
+      position: relative;
+      display: block;
+      min-height: 220px;
+      border: 2px dashed #cbd5e1;
+      border-radius: var(--radius);
+      padding: 12px;
+      background: linear-gradient(135deg, #f8fafc, #f1f5f9);
+      cursor: pointer;
+      overflow: hidden;
+      transition: all var(--transition);
+    }
+
+    .file-box:hover {
+      border-color: var(--primary);
+      background: linear-gradient(135deg, #eff6ff, #dbeafe);
+    }
+
+    .file-box input[type="file"] {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      cursor: pointer;
+    }
+
+    .file-box.has-image {
+      border-style: solid;
+      border-color: var(--primary);
+    }
+
+    .file-box strong {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 8px;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .file-box strong::before {
+      content: '📷';
+      font-size: 14px;
+    }
+
+    .preview {
+      min-height: 160px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--line);
+      background: #fff;
+      overflow: hidden;
+      transition: box-shadow var(--transition);
+    }
+
+    .file-box.has-image .preview {
+      box-shadow: var(--shadow-sm);
+    }
+
+    .preview img {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      animation: fadeIn 0.3s ease;
+    }
+
+    .muted {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    /* ─── Table Section ─── */
+    .table-section {
+      flex: 0 1 auto;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    .table-meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 10px;
+      padding: 9px 12px;
+      background: linear-gradient(180deg, #f7f9fc 0%, #edf2f7 100%);
+      border: 1px solid #d4dde7;
+      border-radius: 6px;
+      font-size: 12px;
+      color: #4b5563;
+    }
+
+    .table-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: #1f2937;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .table-title::before {
+      content: '📊';
+    }
+
+    .table-wrap {
+      flex: 0 1 auto;
+      min-height: 120px;
+      border: 1px solid var(--table-head-border);
+      border-radius: 6px;
+      overflow-x: auto;
+      overflow-y: hidden;
+      background: #fff;
+    }
+
+    .report-table {
+      width: 100%;
+      min-width: 980px;
+      border-collapse: collapse;
+      table-layout: fixed;
+    }
+
+    .report-table thead th {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      padding: 8px 6px;
+      border: 1px solid var(--table-head-border);
+      background: linear-gradient(180deg, #bfd4e4 0%, var(--table-head-bg) 100%);
+      color: #0f172a;
+      font-size: 12px;
+      font-weight: 700;
+      text-align: center;
+      white-space: nowrap;
+    }
+
+    .report-table td {
+      border: 1px solid var(--table-cell-border);
+      text-align: center;
+      vertical-align: middle;
+      color: #111827;
+      font-size: 13px;
+      line-height: 1.4;
+      padding: 6px 6px;
+      font-variant-numeric: tabular-nums;
+      background: #fff;
+      transition: filter var(--transition), box-shadow var(--transition);
+    }
+
+    .report-table tbody tr:hover td {
+      filter: brightness(0.98);
+      box-shadow: inset 0 0 0 999px rgba(255, 255, 255, 0.08);
+    }
+
+    .report-table tbody tr.record-start td {
+      border-top-width: 2px;
+      border-top-color: #26323f;
+    }
+
+    .report-table td.group-basic {
+      background: var(--group-basic);
+      font-weight: 700;
+    }
+
+    .report-table td.group-melt {
+      color: #111827;
+      font-weight: 500;
+      background: var(--group-melt);
+    }
+
+    .report-table td.group-tensile,
+    .report-table td.group-elongation {
+      background: var(--group-warm);
+    }
+
+    .report-table td.group-flexural,
+    .report-table td.group-modulus {
+      color: #111827;
+      font-weight: 500;
+      background: var(--group-flex);
+    }
+
+    .report-table td.group-impact {
+      color: #111827;
+      font-weight: 500;
+      background: var(--group-impact);
+    }
+
+    .report-table td.group-extra {
+      background: var(--group-extra);
+    }
+
+    .empty-cell {
+      color: #bbb;
+    }
+
+    /* ─── Empty State ─── */
+    .empty-panel {
+      flex: 1 1 auto;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      border: 1px dashed #ccc;
+      border-radius: 0;
+      color: #999;
+      background: #fafafa;
+      text-align: center;
+      padding: 24px;
+    }
+
+    .empty-panel .empty-icon {
+      font-size: 48px;
+      opacity: 0.5;
+    }
+
+    .empty-panel .empty-text {
+      font-size: 14px;
+      font-weight: 500;
+      max-width: 280px;
+      line-height: 1.6;
+    }
+
+    /* ─── Output ─── */
+    .output-section {
+      flex: 1 1 auto;
+      display: flex;
+      flex-direction: column;
+      min-height: 120px;
+      overflow: hidden;
+    }
+
+    .output-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin: 0 0 10px;
+    }
+
+    .output-section h1 {
+      margin: 0;
+      font-size: 13px;
+      font-weight: 700;
+      color: #333;
+      text-transform: uppercase;
+      letter-spacing: 0.02em;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .output-section h1::before {
+      content: '';
+      width: 3px;
+      height: 14px;
+      background: #409eff;
+      border-radius: 0;
+    }
+
+    .output-tabs {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px;
+      border: 1px solid #dbe3ee;
+      border-radius: 999px;
+      background: #f8fafc;
+    }
+
+    .tab-btn {
+      height: 30px;
+      padding: 0 14px;
+      border: none;
+      border-radius: 999px;
+      background: transparent;
+      color: #475569;
+      font-size: 12px;
+      font-weight: 700;
+      box-shadow: none;
+      transform: none;
+    }
+
+    .tab-btn:hover:not(:disabled) {
+      background: #e8eef7;
+      border: none;
+      box-shadow: none;
+      transform: none;
+    }
+
+    .tab-btn.active {
+      background: linear-gradient(180deg, #dfeaf5 0%, #c8d9eb 100%);
+      color: #0f172a;
+      box-shadow: inset 0 0 0 1px #8ea6be;
+    }
+
+    .output-panels {
+      position: relative;
+      flex: 1 1 auto;
+      min-height: 0;
+      border-top: 1px solid #e8e8e8;
+      overflow: hidden;
+    }
+
+    .output-panel {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      width: 100%;
+      height: 100%;
+      min-height: 0;
+      visibility: hidden;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .output-panel.active {
+      visibility: visible;
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .output-box {
+      width: 100%;
+      flex: 1 1 auto;
+      min-height: 0;
+      margin: 0;
+      padding: 14px;
+      overflow: auto;
+      border: none;
+      border-radius: 0;
+      background: #0f172a;
+      color: #e2e8f0;
+      font-family: "JetBrains Mono", "Fira Code", "Cascadia Code", Consolas, monospace;
+      font-size: 12px;
+      line-height: 1.7;
+      white-space: pre-wrap;
+      word-break: break-word;
+      box-shadow: inset 0 2px 6px rgba(0,0,0,0.15);
+    }
+
+    .compare-preview {
+      flex: 1 1 auto;
+      min-height: 0;
+      position: relative;
+      padding: 0;
+      background: #fff;
+      overflow: hidden;
+    }
+
+    .compare-toolbar {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      z-index: 3;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px;
+      border: 1px solid rgba(148, 163, 184, 0.45);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.92);
+      box-shadow: 0 6px 18px rgba(15, 23, 42, 0.1);
+      backdrop-filter: blur(10px);
+    }
+
+    .compare-tool-btn {
+      width: 30px;
+      min-width: 30px;
+      height: 30px;
+      padding: 0;
+      border: none;
+      border-radius: 999px;
+      background: #eef4fa;
+      color: #1e293b;
+      font-size: 16px;
+      font-weight: 700;
+      box-shadow: none;
+      transform: none;
+    }
+
+    .compare-tool-btn.label-btn {
+      width: auto;
+      min-width: 44px;
+      padding: 0 10px;
+      font-size: 13px;
+    }
+
+    .compare-tool-btn:hover:not(:disabled) {
+      background: #dbe8f5;
+      box-shadow: none;
+      transform: none;
+    }
+
+    .zoom-indicator {
+      min-width: 48px;
+      text-align: center;
+      color: #334155;
+      font-size: 12px;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .compare-stage {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #fff;
+      touch-action: none;
+      cursor: grab;
+    }
+
+    .compare-stage.is-dragging {
+      cursor: grabbing;
+    }
+
+    .compare-preview .preview {
+      width: 100%;
+      height: 100%;
+      min-height: 100%;
+      position: relative;
+      border: none;
+      background: #fff;
+      box-shadow: none;
+      overflow: hidden;
+    }
+
+    .compare-preview .preview img {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      max-width: none;
+      max-height: none;
+      width: auto;
+      height: auto;
+      user-select: none;
+      pointer-events: none;
+      -webkit-user-drag: none;
+      will-change: transform;
+      backface-visibility: hidden;
+    }
+
+    .compare-empty {
+      color: #64748b;
+      font-size: 13px;
+      text-align: center;
+      padding: 24px;
+    }
+
+    /* ─── Status Badge ─── */
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 600;
+      background: #f1f5f9;
+      color: var(--muted);
+    }
+
+    .status-badge.connected {
+      background: #d1fae5;
+      color: #065f46;
+    }
+
+    .status-badge.error {
+      background: #fee2e2;
+      color: #991b1b;
+    }
+
+    .status-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+
+    /* ─── Loading Spinner ─── */
+    .spinner {
+      width: 18px;
+      height: 18px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: scale(0.95); }
+      to { opacity: 1; transform: scale(1); }
+    }
+
+    @keyframes slideUp {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .fade-in {
+      animation: fadeIn 0.3s ease;
+    }
+
+    .slide-up {
+      animation: slideUp 0.35s ease;
+    }
+
+    /* ─── Connection Status Row ─── */
+    .connection-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .connection-row button {
+      flex-shrink: 0;
+    }
+
+    .connection-row .status-badge {
+      flex-shrink: 0;
+    }
+
+    /* ─── Tooltip ─── */
+    [data-tooltip] {
+      position: relative;
+    }
+
+    [data-tooltip]::after {
+      content: attr(data-tooltip);
+      position: absolute;
+      bottom: calc(100% + 6px);
+      left: 50%;
+      transform: translateX(-50%) translateY(4px);
+      padding: 4px 8px;
+      background: #1e293b;
+      color: #f1f5f9;
+      font-size: 11px;
+      font-weight: 500;
+      border-radius: 4px;
+      white-space: nowrap;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.15s, transform 0.15s;
+      z-index: 10;
+    }
+
+    [data-tooltip]:hover::after {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    /* ─── Responsive ─── */
+    @media (max-width: 1080px) {
+      body {
+        overflow: auto;
+      }
+
+      .app {
+        grid-template-columns: 1fr;
+        height: auto;
+      }
+
+      .main, .sidebar {
+        overflow: visible;
+      }
+
+      .output-section {
+        max-height: none;
+        min-height: 180px;
+      }
+    }
+
+    /* ─── Scrollbar ─── */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 3px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: #94a3b8;
+    }
+
+    /* ─── Processing overlay on button ─── */
+    .btn-processing {
+      pointer-events: none;
+      position: relative;
+    }
+
+    .btn-processing::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: rgba(255,255,255,0.15);
+      border-radius: inherit;
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="panel sidebar slide-up">
+      <!-- Connection -->
+      <section class="section">
+        <h2>连接设置</h2>
+        <div class="field">
+          <label for="baseUrlInput">LM Studio Base URL</label>
+          <input id="baseUrlInput" type="url" value="http://192.168.0.57:1234" placeholder="http://host:port">
+        </div>
+        <div class="field">
+          <label for="modelSelect">模型</label>
+          <div class="row">
+            <select id="modelSelect" style="flex:1; min-width:0;">
+              <option value="">请先检测连接以加载模型列表</option>
+            </select>
+              <button id="refreshModelsBtn" type="button" data-tooltip="刷新模型列表" style="flex-shrink:0;">
+                ↻
+              </button>
+          </div>
+        </div>
+        <div class="connection-row">
+          <button id="checkConnectionBtn" type="button" class="btn-primary" style="flex:1;">
+            检测并加载模型
+          </button>
+          <span id="connectionBadge" class="status-badge">
+            <span class="status-dot"></span>未连接</span>
+        </div>
+      </section>
+
+      <!-- Image -->
+      <section class="section">
+        <h2>上传图片</h2>
+        <label class="file-box" id="fileBox">
+          <input id="imageInput" type="file" accept="image/*">
+          <strong>选择图片</strong>
+          <div class="preview" id="previewBox">
+            <span class="muted">点击或拖拽图片到此处</span>
+          </div>
+        </label>
+        <div class="row" style="margin-top: 14px;">
+          <button class="btn-primary" id="recognizeBtn" type="button" style="flex:1;">
+            开始识别</button>
+          <button class="btn-danger" id="clearBtn" type="button" data-tooltip="清空所有内容">
+            清空
+          </button>
+        </div>
+      </section>
+    </aside>
+
+    <main class="panel main slide-up" style="animation-delay: 0.08s;">
+      <section class="section table-section" id="tableSection">
+        <div class="empty-panel">
+          <div class="empty-icon">📋</div>
+          <div class="empty-text">识别成功后，这里会按专业表格格式显示 JSON 数据。</div>
+        </div>
+      </section>
+
+      <section class="section output-section">
+        <div class="output-header">
+          <h1>对照查看</h1>
+          <div class="output-tabs" role="tablist" aria-label="结果视图切换">
+            <button class="tab-btn" id="outputTabBtn" type="button" data-tab="output" role="tab" aria-selected="false">输出结果</button>
+            <button class="tab-btn active" id="imageTabBtn" type="button" data-tab="image" role="tab" aria-selected="true">上传图片</button>
+          </div>
+        </div>
+        <div class="output-panels">
+          <div class="output-panel" id="outputPanel" role="tabpanel">
+            <pre class="output-box" id="outputBox">等待识别结果。</pre>
+          </div>
+          <div class="output-panel active" id="imagePanel" role="tabpanel">
+            <div class="compare-preview">
+              <div class="compare-toolbar">
+                <button class="compare-tool-btn" id="zoomOutBtn" type="button" aria-label="缩小">-</button>
+                <div class="zoom-indicator" id="zoomIndicator">100%</div>
+                <button class="compare-tool-btn" id="zoomInBtn" type="button" aria-label="放大">+</button>
+                <button class="compare-tool-btn label-btn" id="resetZoomBtn" type="button" aria-label="重置">重置</button>
+              </div>
+              <div class="compare-stage" id="compareStage">
+                <div class="preview" id="comparePreviewBox">
+                  <span class="compare-empty">等待上传图片。</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    const REFERENCE_DATA = [
+      {
+        "型号": "320G6-N11",
+        "批次": "B506202",
+        "测试温度": "260°",
+        "熔指": [25.6, 25.7, 25.6],
+        "拉伸强度[Mpa]": [135, 134, 136],
+        "断裂伸长率[%]": [1.24, 1.28, 1.29],
+        "弯曲强度[Mpa]": [207, 208, 209],
+        "弯曲模量[Mpa]": [9392, 9450, 9650],
+        "冲击强度[Mpa]": [7.4, 7.5, 7.6, 7.4, 75]
+      },
+      {
+        "型号": "320G6-N11",
+        "批次": "B506202",
+        "测试温度": "260°",
+        "熔指": [25.6, 25.7, 25.6],
+        "拉伸强度[Mpa]": [135, 134, 136],
+        "断裂伸长率[%]": [1.24, 1.28, 1.29],
+        "弯曲强度[Mpa]": [207, 208, 209],
+        "弯曲模量[Mpa]": [9392, 9450, 9650],
+        "冲击强度[Mpa]": [7.4, 7.5, 7.6, 7.4, 75]
+      },
+      {
+        "型号": "320G6-N11",
+        "批次": "B506202",
+        "测试温度": "260°",
+        "熔指": [25.6, 25.7, 25.6],
+        "拉伸强度[Mpa]": [135, 134, 136],
+        "断裂伸长率[%]": [1.24, 1.28, 1.29],
+        "弯曲强度[Mpa]": [207, 208, 209],
+        "弯曲模量[Mpa]": [9392, 9450, 9650],
+        "冲击强度[Mpa]": [7.4, 7.5, 7.6, 7.4, 75]
+      }
+    ];
+
+    const COLUMN_DEFS = [
+      { key: "型号", kind: "basic", className: "group-basic" },
+      { key: "批次", kind: "basic", className: "group-basic" },
+      { key: "测试温度", kind: "basic", className: "group-basic" },
+      { key: "熔指", kind: "measure", className: "group-melt" },
+      { key: "拉伸强度[Mpa]", kind: "measure", className: "group-tensile" },
+      { key: "断裂伸长率[%]", kind: "measure", className: "group-elongation" },
+      { key: "弯曲强度[Mpa]", kind: "measure", className: "group-flexural" },
+      { key: "弯曲模量[Mpa]", kind: "measure", className: "group-modulus" },
+      { key: "冲击强度[Mpa]", kind: "measure", className: "group-impact" }
+    ];
+
+    const STORAGE_KEYS = {
+      baseUrl: "lmstudio-doc-workbench-base-url",
+      model: "lmstudio-doc-workbench-model"
+    };
+
+    const FIELD_ALIASES = {
+      "牌号": "型号", "样品型号": "型号", "产品型号": "型号",
+      "批号": "批次", "批次号": "批次",
+      "试验温度": "测试温度", "温度": "测试温度", "测试温度℃": "测试温度", "测试温度°C": "测试温度",
+      "熔融指数": "熔指", "熔体流动速率": "熔指", "熔体流动指数": "熔指", "MFR": "熔指", "MI": "熔指",
+      "拉伸强度": "拉伸强度[Mpa]", "抗拉强度": "拉伸强度[Mpa]",
+      "断裂伸长率": "断裂伸长率[%]", "伸长率": "断裂伸长率[%]",
+      "弯曲强度": "弯曲强度[Mpa]", "挠曲强度": "弯曲强度[Mpa]",
+      "弯曲模量": "弯曲模量[Mpa]", "挠曲模量": "弯曲模量[Mpa]",
+      "冲击强度": "冲击强度[Mpa]", "缺口冲击[Mpa]": "冲击强度[Mpa]",
+      "缺口冲击": "冲击强度[Mpa]", "缺口冲击强度[Mpa]": "冲击强度[Mpa]",
+      "缺口冲击强度": "冲击强度[Mpa]", "简支梁缺口冲击强度": "冲击强度[Mpa]",
+      "冲击值[Mpa]": "冲击强度[Mpa]", "冲击值": "冲击强度[Mpa]"
+    };
+
+    const state = {
+      baseUrl: localStorage.getItem(STORAGE_KEYS.baseUrl) || "http://192.168.0.57:1234",
+      model: localStorage.getItem(STORAGE_KEYS.model) || "",
+      imageDataUrl: "",
+      parsedRecords: [],
+      rawText: "",
+      connected: false,
+      activeOutputTab: "image",
+      compareView: {
+        zoom: 1,
+        fitScale: 1,
+        offsetX: 0,
+        offsetY: 0,
+        dragging: false,
+        startX: 0,
+        startY: 0,
+        baseX: 0,
+        baseY: 0
+      }
+    };
+
+    const els = {
+      baseUrlInput: document.getElementById("baseUrlInput"),
+      modelSelect: document.getElementById("modelSelect"),
+      refreshModelsBtn: document.getElementById("refreshModelsBtn"),
+      checkConnectionBtn: document.getElementById("checkConnectionBtn"),
+      imageInput: document.getElementById("imageInput"),
+      recognizeBtn: document.getElementById("recognizeBtn"),
+      clearBtn: document.getElementById("clearBtn"),
+      previewBox: document.getElementById("previewBox"),
+      comparePreviewBox: document.getElementById("comparePreviewBox"),
+      compareStage: document.getElementById("compareStage"),
+      fileBox: document.getElementById("fileBox"),
+      tableSection: document.getElementById("tableSection"),
+      outputBox: document.getElementById("outputBox"),
+      outputPanel: document.getElementById("outputPanel"),
+      imagePanel: document.getElementById("imagePanel"),
+      outputTabBtn: document.getElementById("outputTabBtn"),
+      imageTabBtn: document.getElementById("imageTabBtn"),
+      zoomOutBtn: document.getElementById("zoomOutBtn"),
+      zoomInBtn: document.getElementById("zoomInBtn"),
+      resetZoomBtn: document.getElementById("resetZoomBtn"),
+      zoomIndicator: document.getElementById("zoomIndicator"),
+      connectionBadge: document.getElementById("connectionBadge"),
+      main: document.querySelector(".main"),
+      outputSection: document.querySelector(".output-section")
+    };
+
+    function setOutput(text) {
+      els.outputBox.textContent = text || "";
+      els.outputBox.scrollTop = els.outputBox.scrollHeight;
+    }
+
+    function updateZoomIndicator() {
+      els.zoomIndicator.textContent = `${Math.round(state.compareView.zoom * 100)}%`;
+    }
+
+    function clampCompareOffsets() {
+      const img = els.comparePreviewBox.querySelector("img");
+      if (!img) return;
+      const stageWidth = els.compareStage.clientWidth || 1;
+      const stageHeight = els.compareStage.clientHeight || 1;
+      const renderedWidth = (img.naturalWidth || 0) * state.compareView.fitScale * state.compareView.zoom;
+      const renderedHeight = (img.naturalHeight || 0) * state.compareView.fitScale * state.compareView.zoom;
+      const maxOffsetX = Math.max(0, (renderedWidth - stageWidth) / 2);
+      const maxOffsetY = Math.max(0, (renderedHeight - stageHeight) / 2);
+      state.compareView.offsetX = Math.min(maxOffsetX, Math.max(-maxOffsetX, state.compareView.offsetX));
+      state.compareView.offsetY = Math.min(maxOffsetY, Math.max(-maxOffsetY, state.compareView.offsetY));
+    }
+
+    function refreshCompareFit({ resetOffsets = false } = {}) {
+      const img = els.comparePreviewBox.querySelector("img");
+      if (!img || !img.naturalWidth || !img.naturalHeight) {
+        state.compareView.fitScale = 1;
+        updateZoomIndicator();
+        return;
+      }
+      const stageWidth = els.compareStage.clientWidth || 1;
+      const stageHeight = els.compareStage.clientHeight || 1;
+      const scaleX = stageWidth / img.naturalWidth;
+      const scaleY = stageHeight / img.naturalHeight;
+      state.compareView.fitScale = Math.min(scaleX, scaleY);
+      if (resetOffsets || state.compareView.zoom <= 1) {
+        state.compareView.offsetX = 0;
+        state.compareView.offsetY = 0;
+      } else {
+        clampCompareOffsets();
+      }
+      applyCompareTransform();
+    }
+
+    function applyCompareTransform() {
+      const img = els.comparePreviewBox.querySelector("img");
+      updateZoomIndicator();
+      if (!img) return;
+      clampCompareOffsets();
+      const displayScale = state.compareView.fitScale * state.compareView.zoom;
+      img.style.transform = `translate3d(${state.compareView.offsetX}px, ${state.compareView.offsetY}px, 0) translate(-50%, -50%) scale(${displayScale})`;
+      img.style.transformOrigin = "center center";
+    }
+
+    function resetCompareTransform(zoom = 1) {
+      state.compareView.zoom = zoom;
+      state.compareView.offsetX = 0;
+      state.compareView.offsetY = 0;
+      refreshCompareFit({ resetOffsets: true });
+    }
+
+    function setCompareScale(nextZoom) {
+      const zoom = Math.max(0.5, Math.min(6, nextZoom));
+      state.compareView.zoom = zoom;
+      if (zoom <= 1) {
+        state.compareView.offsetX = 0;
+        state.compareView.offsetY = 0;
+      }
+      applyCompareTransform();
+    }
+
+    function syncImagePreviewPanels() {
+      const emptyHtml = '<span class="muted">点击或拖拽图片到此处</span>';
+      const compareEmptyHtml = '<span class="compare-empty">等待上传图片。</span>';
+      if (state.imageDataUrl) {
+        const imageHtml = `<img src="${state.imageDataUrl}" alt="预览" draggable="false">`;
+        els.previewBox.innerHTML = imageHtml;
+        els.comparePreviewBox.innerHTML = imageHtml;
+        els.fileBox.classList.add("has-image");
+        const compareImg = els.comparePreviewBox.querySelector("img");
+        if (compareImg) {
+          compareImg.addEventListener("load", () => refreshCompareFit({ resetOffsets: true }), { once: true });
+          if (compareImg.complete) refreshCompareFit({ resetOffsets: true });
+        }
+        resetCompareTransform(1);
+      } else {
+        els.previewBox.innerHTML = emptyHtml;
+        els.comparePreviewBox.innerHTML = compareEmptyHtml;
+        els.fileBox.classList.remove("has-image");
+        resetCompareTransform(1);
+      }
+    }
+
+    function setActiveOutputTab(tab) {
+      const nextTab = tab === "image" ? "image" : "output";
+      state.activeOutputTab = nextTab;
+      const showOutput = nextTab === "output";
+      els.outputPanel.classList.toggle("active", showOutput);
+      els.imagePanel.classList.toggle("active", !showOutput);
+      els.outputTabBtn.classList.toggle("active", showOutput);
+      els.imageTabBtn.classList.toggle("active", !showOutput);
+      els.outputTabBtn.setAttribute("aria-selected", showOutput ? "true" : "false");
+      els.imageTabBtn.setAttribute("aria-selected", showOutput ? "false" : "true");
+      if (!showOutput && state.imageDataUrl) {
+        requestAnimationFrame(() => refreshCompareFit({ resetOffsets: state.compareView.zoom <= 1 }));
+      }
+    }
+
+    function bindCompareViewerEvents() {
+      els.zoomInBtn.addEventListener("click", () => setCompareScale(state.compareView.zoom * 1.2));
+      els.zoomOutBtn.addEventListener("click", () => setCompareScale(state.compareView.zoom / 1.2));
+      els.resetZoomBtn.addEventListener("click", () => resetCompareTransform(1));
+
+      els.compareStage.addEventListener("wheel", (event) => {
+        if (!state.imageDataUrl) return;
+        event.preventDefault();
+        const ratio = event.deltaY < 0 ? 1.12 : 1 / 1.12;
+        setCompareScale(state.compareView.zoom * ratio);
+      }, { passive: false });
+
+      els.compareStage.addEventListener("pointerdown", (event) => {
+        if (!state.imageDataUrl) return;
+        if (event.button !== 0) return;
+        if (state.compareView.zoom <= 1) return;
+        event.preventDefault();
+        state.compareView.dragging = true;
+        state.compareView.startX = event.clientX;
+        state.compareView.startY = event.clientY;
+        state.compareView.baseX = state.compareView.offsetX;
+        state.compareView.baseY = state.compareView.offsetY;
+        els.compareStage.classList.add("is-dragging");
+        els.compareStage.setPointerCapture(event.pointerId);
+      });
+
+      els.compareStage.addEventListener("pointermove", (event) => {
+        if (!state.compareView.dragging) return;
+        event.preventDefault();
+        state.compareView.offsetX = state.compareView.baseX + (event.clientX - state.compareView.startX);
+        state.compareView.offsetY = state.compareView.baseY + (event.clientY - state.compareView.startY);
+        applyCompareTransform();
+      });
+
+      const stopDragging = (event) => {
+        if (state.compareView.dragging && event?.pointerId != null && els.compareStage.hasPointerCapture(event.pointerId)) {
+          els.compareStage.releasePointerCapture(event.pointerId);
+        }
+        state.compareView.dragging = false;
+        els.compareStage.classList.remove("is-dragging");
+      };
+
+      els.compareStage.addEventListener("pointerup", stopDragging);
+      els.compareStage.addEventListener("pointercancel", stopDragging);
+      els.compareStage.addEventListener("lostpointercapture", stopDragging);
+      els.compareStage.addEventListener("dblclick", () => {
+        if (!state.imageDataUrl) return;
+        resetCompareTransform(1);
+      });
+    }
+
+    function setConnectionStatus(status) {
+      const badge = els.connectionBadge;
+      badge.className = "status-badge";
+      if (status === "connected") {
+        badge.classList.add("connected");
+        badge.innerHTML = '<span class="status-dot"></span>已连接';
+        state.connected = true;
+      } else if (status === "error") {
+        badge.classList.add("error");
+        badge.innerHTML = '<span class="status-dot"></span>连接失败';
+        state.connected = false;
+      } else {
+        badge.innerHTML = '<span class="status-dot"></span>未连接';
+        state.connected = false;
+      }
+    }
+
+    function setRecognizing(busy) {
+      els.recognizeBtn.disabled = busy;
+      if (busy) {
+        els.recognizeBtn.innerHTML = '<span class="spinner" style="display:inline-block;vertical-align:middle;"></span> 识别中...';
+        els.recognizeBtn.classList.add("btn-processing");
+      } else {
+        els.recognizeBtn.textContent = "开始识别";
+        els.recognizeBtn.classList.remove("btn-processing");
+      }
+    }
+
+    function persistConfig() {
+      localStorage.setItem(STORAGE_KEYS.baseUrl, state.baseUrl);
+      localStorage.setItem(STORAGE_KEYS.model, state.model);
+    }
+
+    function normalizeBaseUrl(url) {
+      return String(url || "").trim().replace(/\/+$/, "");
+    }
+
+    function escapeHtml(value) {
+      return String(value)
+        .replaceAll("&", "&amp;").replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;").replaceAll('"', "&quot;")
+        .replaceAll("'", "&#39;");
+    }
+
+    function normalizeFieldToken(value) {
+      return String(value || "").toLowerCase()
+        .replace(/[\s\r\n\t]/g, "").replace(/[℃【\[]/g, "[").replace(/[°】\]]/g, "]")
+        .replace(/℃|°c/g, "c").replace(/[%％]/g, "%")
+        .replace(/[:"'`.,，。？！\\|_-]/g, "")
+        .replace(/\[(mpa|%|c)\]/g, "$1").replace(/\[|\]/g, "");
+    }
+
+    const FIELD_LOOKUP = (() => {
+      const map = new Map();
+      const register = (source, canonical) => {
+        map.set(source, canonical);
+        map.set(normalizeFieldToken(source), canonical);
+      };
+      COLUMN_DEFS.forEach((column) => register(column.key, column.key));
+      Object.entries(FIELD_ALIASES).forEach(([alias, canonical]) => register(alias, canonical));
+      return map;
+    })();
+
+    const CANONICAL_FIELD_TOKENS = COLUMN_DEFS.map((column) => ({
+      canonical: column.key,
+      token: normalizeFieldToken(column.key)
+    }));
+
+    function resolveCanonicalFieldName(rawKey) {
+      if (FIELD_LOOKUP.has(rawKey)) return FIELD_LOOKUP.get(rawKey);
+      const token = normalizeFieldToken(rawKey);
+      if (FIELD_LOOKUP.has(token)) return FIELD_LOOKUP.get(token);
+      const fuzzy = CANONICAL_FIELD_TOKENS.find((item) => token.includes(item.token) || item.token.includes(token));
+      return fuzzy ? fuzzy.canonical : rawKey;
+    }
+
+    function mergeFieldValue(leftValue, rightValue) {
+      if (leftValue == null || leftValue === "") return rightValue;
+      if (rightValue == null || rightValue === "") return leftValue;
+      if (Array.isArray(leftValue) || Array.isArray(rightValue)) {
+        const left = Array.isArray(leftValue) ? leftValue : [leftValue];
+        const right = Array.isArray(rightValue) ? rightValue : [rightValue];
+        return [...left, ...right].filter((item) => item !== "" && item != null);
+      }
+      return leftValue;
+    }
+
+    function normalizeRecord(record) {
+      const normalized = {};
+      Object.entries(record || {}).forEach(([key, value]) => {
+        const canonicalKey = resolveCanonicalFieldName(key);
+        normalized[canonicalKey] = mergeFieldValue(normalized[canonicalKey], value);
+      });
+      return normalized;
+    }
+
+    function normalizeRecordTypes(record) {
+      const template = REFERENCE_DATA[0];
+      const output = { ...record };
+      Object.keys(template).forEach((key) => {
+        const shouldBeArray = Array.isArray(template[key]);
+        const value = output[key];
+        if (value == null || value === "") { output[key] = shouldBeArray ? [] : ""; return; }
+        if (shouldBeArray && !Array.isArray(value)) { output[key] = [value]; return; }
+        if (!shouldBeArray && Array.isArray(value)) { output[key] = String(value[0] ?? ""); }
+      });
+      return output;
+    }
+
+    function extractJsonCandidate(rawText) {
+      const fenced = rawText.match(/```json\s*([\s\S]*?)```/i) || rawText.match(/```\s*([\s\S]*?)```/i);
+      if (fenced) return fenced[1].trim();
+      const firstBracket = rawText.indexOf("["), lastBracket = rawText.lastIndexOf("]");
+      if (firstBracket !== -1 && lastBracket !== -1 && lastBracket > firstBracket) return rawText.slice(firstBracket, lastBracket + 1);
+      const firstBrace = rawText.indexOf("{"), lastBrace = rawText.lastIndexOf("}");
+      if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) return "[" + rawText.slice(firstBrace, lastBrace + 1) + "]";
+      return rawText.trim();
+    }
+
+    function parseModelJson(rawText) {
+      const candidate = extractJsonCandidate(rawText);
+      let parsed = JSON.parse(candidate);
+      if (!Array.isArray(parsed)) parsed = [parsed];
+      return parsed.map((record) => normalizeRecord(record)).map((record) => normalizeRecordTypes(record));
+    }
+
+    function toSeries(value) {
+      if (Array.isArray(value)) return value.map((item) => item == null ? "" : String(item));
+      if (value == null || value === "") return [];
+      return [String(value)];
+    }
+
+    function formatCell(value) {
+      const text = String(value ?? "").trim();
+      return text ? text : "—";
+    }
+
+    function getColumnClassName(key) {
+      return COLUMN_DEFS.find((item) => item.key === key)?.className || "group-extra";
+    }
+
+    function getOrderedColumns(records) {
+      const preferred = COLUMN_DEFS.map((column) => column.key);
+      const extras = [], seen = new Set();
+      records.forEach((record) => {
+        Object.keys(record || {}).forEach((key) => {
+          if (!seen.has(key)) { seen.add(key); if (!preferred.includes(key)) extras.push(key); }
+        });
+      });
+      return [...preferred.filter((key) => seen.has(key)), ...extras];
+    }
+
+    function getSeriesColumns(records, columns) {
+      return columns.filter((key) => records.some((record) => Array.isArray(record[key])));
+    }
+
+    function getPrimaryRowCount(record, seriesColumns) {
+      const primarySeriesColumns = seriesColumns.filter((key) => key !== "冲击强度[Mpa]");
+      const primaryMax = Math.max(0, ...primarySeriesColumns.map((key) => toSeries(record[key]).length));
+      if (primaryMax > 0) return primaryMax;
+      const impactCount = toSeries(record["冲击强度[Mpa]"]).length;
+      if (impactCount > 0) return Math.min(3, impactCount);
+      return 1;
+    }
+
+    function getRowCount(record, seriesColumns) {
+      return getPrimaryRowCount(record, seriesColumns);
+    }
+
+    function getImpactColumnCount(records, baseColumns) {
+      if (!baseColumns.includes("冲击强度[Mpa]")) return 0;
+      return Math.max(1, ...records.map((record) => {
+        const rowCount = getPrimaryRowCount(record, baseColumns);
+        const impactCount = toSeries(record["冲击强度[Mpa]"]).length;
+        return Math.max(1, Math.ceil(impactCount / rowCount));
+      }));
+    }
+
+    function renderEmptyTable(message) {
+      els.tableSection.innerHTML = `
+        <div class="empty-panel">
+          <div class="empty-icon">📋</div>
+          <div class="empty-text">${escapeHtml(message)}</div>
+        </div>`;
+      syncRightPaneLayout();
+    }
+
+    function syncRightPaneLayout() {
+      const main = els.main, tableSection = els.tableSection, outputSection = els.outputSection;
+      if (!main || !tableSection || !outputSection) return;
+      const mainStyle = getComputedStyle(main);
+      const mainPadY = (parseFloat(mainStyle.paddingTop) || 0) + (parseFloat(mainStyle.paddingBottom) || 0);
+      const mainGap = parseFloat(mainStyle.gap) || 12;
+      const availHeight = main.clientHeight - mainPadY;
+      if (availHeight <= 0) return;
+      const tableWrap = tableSection.querySelector(".table-wrap");
+      const emptyPanel = tableSection.querySelector(".empty-panel");
+      const gap = mainGap;
+      const outputMin = 120;
+      const tableMin = 160;
+
+      if (emptyPanel) {
+        const tableTarget = Math.max(tableMin, Math.round(availHeight * 0.42));
+        const outputTarget = Math.max(outputMin, availHeight - tableTarget - gap);
+        tableSection.style.flex = `0 0 ${tableTarget}px`;
+        tableSection.style.minHeight = "0";
+        tableSection.style.height = `${tableTarget}px`;
+        outputSection.style.flex = `0 0 ${outputTarget}px`;
+        outputSection.style.minHeight = "0";
+        outputSection.style.height = `${outputTarget}px`;
+        return;
+      }
+
+      if (!tableWrap) return;
+
+      const sectionStyle = getComputedStyle(tableSection);
+      const sectionPadY = (parseFloat(sectionStyle.paddingTop) || 0) + (parseFloat(sectionStyle.paddingBottom) || 0);
+      const chromeHeight = sectionPadY + 2;
+      const contentHeight = tableWrap.scrollHeight + chromeHeight;
+
+      // Table grows to fit content, capped at (avail - outputMin - gap)
+      const maxTable = availHeight - outputMin - gap;
+      const tableHeight = Math.max(tableMin, Math.min(contentHeight, maxTable));
+      const outputHeight = availHeight - tableHeight - gap;
+
+      tableSection.style.flex = `0 0 ${tableHeight}px`;
+      tableSection.style.minHeight = `${tableMin}px`;
+      tableSection.style.height = `${tableHeight}px`;
+      outputSection.style.flex = `0 0 ${outputHeight}px`;
+      outputSection.style.minHeight = `${outputMin}px`;
+      outputSection.style.height = `${outputHeight}px`;
+    }
+
+    function renderTable(records) {
+      if (!records.length) { renderEmptyTable("识别成功后，这里会按专业表格格式显示 JSON 数据。"); return; }
+      const columns = getOrderedColumns(records);
+      const seriesColumns = getSeriesColumns(records, columns);
+      const scalarColumns = columns.filter((key) => !seriesColumns.includes(key));
+      const impactColumnCount = getImpactColumnCount(records, seriesColumns);
+      const visibleSeriesColumns = seriesColumns.flatMap((key) => {
+        if (key !== "冲击强度[Mpa]") return [key];
+        return Array.from({ length: impactColumnCount }, (_, index) => ({ key, partIndex: index }));
+      });
+
+      const header = [
+        ...scalarColumns.map((key) => `<th>${escapeHtml(key)}</th>`),
+        ...visibleSeriesColumns.map((column) => {
+          if (typeof column === "string") return `<th>${escapeHtml(column)}</th>`;
+          return `<th>${escapeHtml(column.key)}</th>`;
+        })
+      ].join("");
+
+      const body = records.map((record, recordIndex) => {
+        const rowCount = getRowCount(record, seriesColumns);
+        return Array.from({ length: rowCount }, (_, rowIndex) => {
+          const cells = [];
+          const rowClass = rowIndex === 0 && recordIndex > 0 ? "record-start" : "";
+          scalarColumns.forEach((key) => {
+            if (rowIndex > 0) return;
+            const value = formatCell(record[key]);
+            const emptyClass = value === "—" ? " empty-cell" : "";
+            cells.push(`<td class="${getColumnClassName(key)}" rowspan="${rowCount}"><span class="${emptyClass.trim()}">${escapeHtml(value)}</span></td>`);
+          });
+          visibleSeriesColumns.forEach((column) => {
+            const key = typeof column === "string" ? column : column.key;
+            const className = getColumnClassName(key);
+            const series = toSeries(record[key]);
+            let rawValue = "";
+            if (typeof column === "string") {
+              rawValue = series[rowIndex] ?? "";
+            } else {
+              const startIdx = column.partIndex * rowCount;
+              rawValue = series[startIdx + rowIndex] ?? "";
+            }
+            const value = formatCell(rawValue);
+            const emptyClass = value === "—" ? " empty-cell" : "";
+            cells.push(`<td class="${className}"><span class="${emptyClass.trim()}">${escapeHtml(value)}</span></td>`);
+          });
+          return `<tr class="${rowClass}">${cells.join("")}</tr>`;
+        }).join("");
+      }).join("");
+
+      els.tableSection.innerHTML = `
+        <div class="table-wrap">
+          <table class="report-table">
+            <thead><tr>${header}</tr></thead>
+            <tbody>${body}</tbody>
+          </table>
+        </div>`;
+      syncRightPaneLayout();
+    }
+
+    function fileToDataUrl(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(reader.error || new Error("图片读取失败"));
+        reader.readAsDataURL(file);
+      });
+    }
+
+    async function loadModels({ silent = false } = {}) {
+      state.baseUrl = els.baseUrlInput.value.trim();
+      persistConfig();
+      try {
+        const response = await fetch(normalizeBaseUrl(state.baseUrl) + "/v1/models");
+        if (!response.ok) throw new Error(`状态码 ${response.status}`);
+        const payload = await response.json();
+        const models = Array.isArray(payload.data)
+          ? payload.data.map((item) => item?.id || item?.name || item?.model || "").filter(Boolean) : [];
+        if (!models.length) {
+          els.modelSelect.innerHTML = '<option value="">未加载到模型</option>';
+          state.model = "";
+          persistConfig();
+          setConnectionStatus("connected");
+          return;
+        }
+        els.modelSelect.innerHTML = ['<option value="">请选择模型</option>']
+          .concat(models.map((model) => `<option value="${escapeHtml(model)}">${escapeHtml(model)}</option>`))
+          .join("");
+        const next = models.includes(state.model) ? state.model : models[0];
+        els.modelSelect.value = next;
+        state.model = next;
+        persistConfig();
+        setConnectionStatus("connected");
+      } catch (error) {
+        els.modelSelect.innerHTML = '<option value="">未加载到模型</option>';
+        state.model = "";
+        persistConfig();
+        setConnectionStatus("error");
+        if (!silent) setOutput("加载模型失败:\n\n" + (error.message || String(error)));
+      }
+    }
+
+    async function callLmStudio(baseUrl, model, imageDataUrl, prompt, onDelta = () => {}) {
+      const response = await fetch(normalizeBaseUrl(baseUrl) + "/v1/chat/completions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Accept": "text/event-stream" },
+        body: JSON.stringify({
+          model, temperature: 0.1, stream: true,
+          messages: [
+            { role: "system", content: "你只返回 JSON，不要返回任何解释。" },
+            {
+              role: "user",
+              content: [
+                {
+                  type: "text",
+                  text: [
+                    "你是一个材料检测表 OCR 结构化助手。",
+                    "请严格读取图片中的表格内容，并只输出合法 JSON。",
+                    "输出必须是 JSON 数组，每个元素为一条检测记录。",
+                    "基础字段（型号、批次、测试温度）输出单值字符串；测量字段输出数组。",
+                    "字段名标准如下：型号、批次、测试温度、熔指、拉伸强度[Mpa]、断裂伸长率[%]、弯曲强度[Mpa]、弯曲模量[Mpa]、冲击强度[Mpa]",
+                    "以下是参考示例数据，请严格按照此格式输出：",
+                    JSON.stringify(REFERENCE_DATA, null, 2),
+                    "不要输出 markdown，不要输出解释，不要使用代码块。"
+                  ].join("\n")
+                },
+                { type: "image_url", image_url: { url: imageDataUrl } }
+              ]
+            }
+          ]
+        })
+      });
+
+      if (!response.ok) throw new Error(`LM Studio 调用失败 (${response.status})\n${await response.text()}`);
+
+      const reader = response.body?.getReader();
+      if (!reader) {
+        const payload = await response.json();
+        const content = payload?.choices?.[0]?.message?.content || "";
+        const text = Array.isArray(content) ? content.map((item) => item?.text || "").join("\n") : String(content);
+        onDelta(text);
+        return text;
+      }
+
+      const decoder = new TextDecoder("utf-8");
+      let buffer = "", fullText = "";
+      const flushChunk = (chunk) => {
+        const lines = chunk.split(/\r?\n/);
+        for (const line of lines) {
+          if (!line.startsWith("data:")) continue;
+          const data = line.slice(5).trim();
+          if (!data || data === "[DONE]") continue;
+          try {
+            const payload = JSON.parse(data);
+            const delta = payload?.choices?.[0]?.delta?.content
+              ?? payload?.choices?.[0]?.message?.content
+              ?? payload?.choices?.[0]?.text ?? "";
+            if (delta) { fullText += delta; onDelta(fullText); }
+          } catch { /* ignore */ }
+        }
+      };
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const parts = buffer.split(/\r?\n\r?\n/);
+        buffer = parts.pop() || "";
+        parts.forEach(flushChunk);
+      }
+      buffer += decoder.decode();
+      if (buffer.trim()) flushChunk(buffer);
+      return fullText;
+    }
+
+    async function recognizeImage() {
+      state.baseUrl = els.baseUrlInput.value.trim();
+      state.model = els.modelSelect.value.trim();
+      persistConfig();
+      if (!state.imageDataUrl) { setOutput("请先选择图片。"); return; }
+      if (!state.model) { setOutput("请先选择模型。"); return; }
+
+      setRecognizing(true);
+      setActiveOutputTab("output");
+      setOutput("开始识别...\n");
+      try {
+        const rawText = await callLmStudio(state.baseUrl, state.model, state.imageDataUrl, "", (text) => setOutput(text));
+        state.rawText = rawText;
+        state.parsedRecords = parseModelJson(rawText);
+        renderTable(state.parsedRecords);
+        setOutput(rawText || "模型没有返回内容。");
+      } catch (error) {
+        state.parsedRecords = [];
+        renderEmptyTable("识别失败，暂时无法生成表格。");
+        setOutput("识别失败:\n\n" + (error.message || String(error)));
+      } finally {
+        setRecognizing(false);
+      }
+    }
+
+    function clearAll() {
+      state.imageDataUrl = "";
+      state.parsedRecords = [];
+      state.rawText = "";
+      els.imageInput.value = "";
+      syncImagePreviewPanels();
+      setActiveOutputTab("image");
+      renderEmptyTable("识别成功后，这里会按专业表格格式显示 JSON 数据。");
+      setOutput("等待识别结果。");
+    }
+
+    function bindEvents() {
+      els.checkConnectionBtn.addEventListener("click", () => loadModels({ silent: false }));
+      els.refreshModelsBtn.addEventListener("click", () => loadModels({ silent: false }));
+      els.recognizeBtn.addEventListener("click", recognizeImage);
+      els.clearBtn.addEventListener("click", clearAll);
+      bindCompareViewerEvents();
+      els.modelSelect.addEventListener("change", () => {
+        state.model = els.modelSelect.value;
+        persistConfig();
+      });
+      els.outputTabBtn.addEventListener("click", () => setActiveOutputTab("output"));
+      els.imageTabBtn.addEventListener("click", () => setActiveOutputTab("image"));
+
+      els.imageInput.addEventListener("change", async (event) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+        try {
+          state.imageDataUrl = await fileToDataUrl(file);
+          syncImagePreviewPanels();
+          setActiveOutputTab("image");
+          setOutput("图片已加载。");
+        } catch (error) {
+          setOutput("图片读取失败:\n\n" + (error.message || String(error)));
+        }
+      });
+
+      // Drag & drop support
+      const fileBox = els.fileBox;
+      fileBox.addEventListener("dragover", (e) => { e.preventDefault(); fileBox.style.borderColor = "var(--primary)"; });
+      fileBox.addEventListener("dragleave", () => { fileBox.style.borderColor = ""; });
+      fileBox.addEventListener("drop", async (e) => {
+        e.preventDefault();
+        fileBox.style.borderColor = "";
+        const file = e.dataTransfer?.files?.[0];
+        if (!file || !file.type.startsWith("image/")) return;
+        try {
+          state.imageDataUrl = await fileToDataUrl(file);
+          syncImagePreviewPanels();
+          setActiveOutputTab("image");
+          setOutput("图片已加载（拖拽）。");
+        } catch (error) {
+          setOutput("图片读取失败:\n\n" + (error.message || String(error)));
+        }
+      });
+    }
+
+    function init() {
+      els.baseUrlInput.value = state.baseUrl;
+      bindEvents();
+      loadModels({ silent: true });
+      syncImagePreviewPanels();
+      setActiveOutputTab(state.activeOutputTab);
+      renderEmptyTable("识别成功后，这里会按专业表格格式显示 JSON 数据。");
+      setOutput("等待识别结果。");
+    }
+
+    init();
+    window.addEventListener("resize", () => {
+      syncRightPaneLayout();
+      refreshCompareFit({ resetOffsets: state.compareView.zoom <= 1 });
+    });
+  </script>
+</body>
+</html>
+
+
+

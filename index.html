@@ -13,8 +13,20 @@
       <section class="section">
         <h2>连接设置</h2>
         <div class="field">
+          <label for="providerSelect">模型来源</label>
+          <select id="providerSelect">
+            <option value="lmstudio">本地 LM Studio</option>
+            <option value="openrouter">OpenRouter</option>
+          </select>
+        </div>
+        <div class="field">
           <label for="baseUrlInput">LM Studio Base URL</label>
           <input id="baseUrlInput" type="url" value="http://localhost:1234" placeholder="http://host:port">
+        </div>
+        <div class="field">
+          <label for="openRouterKeyInput">OpenRouter API Key</label>
+          <input id="openRouterKeyInput" type="password" placeholder="sk-or-...">
+          <div class="muted" style="margin-top: 6px;">密钥只保存在当前浏览器本地。</div>
         </div>
         <div class="field">
           <label for="modelSelect">模型</label>

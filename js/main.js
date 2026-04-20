@@ -1,7 +1,7 @@
-
+﻿
     const REFERENCE_DATA = [
       {
-        "型号": "320G6-N11",
+        "型号": "320G6-B1S",
         "批次": "B506202",
         "测试温度": "260°",
         "熔指": [25.6, 25.7, 25.6],
@@ -12,7 +12,7 @@
         "冲击强度[Mpa]": [7.4, 7.5, 7.6, 7.4, 75]
       },
       {
-        "型号": "320G6-N11",
+        "型号": "320G2-N1",
         "批次": "B506202",
         "测试温度": "260°",
         "熔指": [25.6, 25.7, 25.6],
@@ -23,7 +23,7 @@
         "冲击强度[Mpa]": [7.4, 7.5, 7.6, 7.4, 75]
       },
       {
-        "型号": "320G6-N11",
+        "型号": "320G1-B2H",
         "批次": "B506202",
         "测试温度": "260°",
         "熔指": [25.6, 25.7, 25.6],
@@ -49,7 +49,10 @@
 
     const STORAGE_KEYS = {
       baseUrl: "lmstudio-doc-workbench-base-url",
-      model: "lmstudio-doc-workbench-model"
+      model: "lmstudio-doc-workbench-model",
+      provider: "lmstudio-doc-workbench-provider",
+      openRouterApiKey: "lmstudio-doc-workbench-openrouter-api-key",
+      selectedModelByProvider: "lmstudio-doc-workbench-selected-model-by-provider"
     };
 
     const BASE_COMPARE_ZOOM = 1.1;
@@ -69,9 +72,21 @@
       "冲击值[Mpa]": "冲击强度[Mpa]", "冲击值": "冲击强度[Mpa]"
     };
 
+    function readJsonStorage(key, fallback) {
+      try {
+        const value = localStorage.getItem(key);
+        return value ? JSON.parse(value) : fallback;
+      } catch {
+        return fallback;
+      }
+    }
+
     const state = {
       baseUrl: localStorage.getItem(STORAGE_KEYS.baseUrl) || "http://localhost:1234",
-      model: localStorage.getItem(STORAGE_KEYS.model) || "",
+      provider: localStorage.getItem(STORAGE_KEYS.provider) || "lmstudio",
+      openRouterApiKey: localStorage.getItem(STORAGE_KEYS.openRouterApiKey) || "",
+      selectedModelByProvider: readJsonStorage(STORAGE_KEYS.selectedModelByProvider, {}),
+      model: "",
       imageDataUrl: "",
       parsedRecords: [],
       rawText: "",
@@ -90,7 +105,9 @@
     };
 
     const els = {
+      providerSelect: document.getElementById("providerSelect"),
       baseUrlInput: document.getElementById("baseUrlInput"),
+      openRouterKeyInput: document.getElementById("openRouterKeyInput"),
       modelSelect: document.getElementById("modelSelect"),
       modelSelectRoot: document.getElementById("modelSelectRoot"),
       modelSelectTrigger: document.getElementById("modelSelectTrigger"),
@@ -123,7 +140,6 @@
       rightPaneLayoutRaf = requestAnimationFrame(() => {
         rightPaneLayoutRaf = requestAnimationFrame(() => {
           rightPaneLayoutRaf = 0;
-      scheduleRightPaneLayoutSync();
         });
       });
     }
@@ -144,9 +160,12 @@
       }
     }
 
-    function setSelectedModel(model, label = model, { persist = true } = {}) {
-      const next = String(model || "").trim();
+    function setSelectedModel(modelId, label = modelId, { persist = true } = {}) {
+      const next = String(modelId || "").trim();
       state.model = next;
+      if (persist && next) {
+        state.selectedModelByProvider[state.provider] = next;
+      }
       if (els.modelSelect) {
         els.modelSelect.value = next;
       }
@@ -160,6 +179,51 @@
       if (persist) persistConfig();
     }
 
+    function formatTokensPerMillion(value) {
+      const numeric = Number(value);
+      if (!Number.isFinite(numeric)) return "未知";
+      return `$${(numeric * 1000000).toFixed(numeric >= 0.01 ? 0 : 2)}`;
+    }
+
+    function getOpenRouterPriceLabel(model) {
+      const pricing = model?.pricing || {};
+      const prompt = formatTokensPerMillion(pricing.prompt);
+      const completion = formatTokensPerMillion(pricing.completion);
+      return `in ${prompt} / 1M · out ${completion} / 1M`;
+    }
+
+    function isOpenRouterAutoModel(model) {
+      const id = String(model?.id || "").toLowerCase();
+      const name = String(model?.name || "").toLowerCase();
+      return id.startsWith("openrouter/auto") || name.includes("auto router");
+    }
+
+    function isOpenRouterFreeModel(model) {
+      const pricing = model?.pricing || {};
+      const priceFields = ["prompt", "completion", "request", "image", "web_search", "internal_reasoning"];
+      const hasPaidPrice = priceFields.some((field) => Number(pricing[field] || 0) > 0);
+      const name = String(model?.name || "").toLowerCase();
+      const id = String(model?.id || "").toLowerCase();
+      return !hasPaidPrice || name.includes("(free)") || id.includes(":free");
+    }
+
+    function isOpenRouterVisionModel(model) {
+      const inputs = model?.architecture?.input_modalities || [];
+      const outputs = model?.architecture?.output_modalities || [];
+      return inputs.includes("image") && outputs.includes("text");
+    }
+
+    function normalizeOpenRouterModel(model) {
+      const pricing = model?.pricing || {};
+      const sortPrice = Number(pricing.prompt || 0) + Number(pricing.completion || 0) + Number(pricing.request || 0);
+      return {
+        id: String(model?.id || "").trim(),
+        label: String(model?.name || model?.id || "").trim(),
+        meta: getOpenRouterPriceLabel(model),
+        sortPrice
+      };
+    }
+
     function renderModelOptions(models, { emptyLabel = "未加载到模型" } = {}) {
       if (!els.modelSelectMenu) return;
       if (!models.length) {
@@ -169,12 +233,18 @@
       }
 
       els.modelSelectMenu.innerHTML = models.map((model) => {
-        const active = model === state.model ? " active" : "";
-        return `<button type="button" class="model-select-option${active}" role="option" data-value="${escapeHtml(model)}">${escapeHtml(model)}</button>`;
+        const active = model.id === state.model ? " active" : "";
+        return `
+          <button type="button" class="model-select-option${active}" role="option" data-value="${escapeHtml(model.id)}" data-label="${escapeHtml(model.label)}">
+            <span class="model-select-option-inner">
+              <span class="model-select-option-name">${escapeHtml(model.label)}</span>
+              <span class="model-select-option-meta">${escapeHtml(model.meta || "")}</span>
+            </span>
+          </button>`;
       }).join("");
 
-      const visibleLabel = models.includes(state.model) ? state.model : models[0];
-      setSelectedModel(visibleLabel, visibleLabel, { persist: false });
+      const visibleModel = models.find((item) => item.id === state.model) || models[0];
+      setSelectedModel(visibleModel.id, visibleModel.label, { persist: false });
     }
 
     function isEmbeddingsModel(name) {
@@ -363,10 +433,42 @@
     function persistConfig() {
       localStorage.setItem(STORAGE_KEYS.baseUrl, state.baseUrl);
       localStorage.setItem(STORAGE_KEYS.model, state.model);
+      localStorage.setItem(STORAGE_KEYS.provider, state.provider);
+      localStorage.setItem(STORAGE_KEYS.openRouterApiKey, state.openRouterApiKey);
+      localStorage.setItem(STORAGE_KEYS.selectedModelByProvider, JSON.stringify(state.selectedModelByProvider || {}));
     }
 
     function normalizeBaseUrl(url) {
       return String(url || "").trim().replace(/\/+$/, "");
+    }
+
+    function normalizeProvider(provider) {
+      return provider === "openrouter" ? "openrouter" : "lmstudio";
+    }
+
+    function setProvider(provider, { persist = true } = {}) {
+      const next = normalizeProvider(provider);
+      state.provider = next;
+      if (els.providerSelect) {
+        els.providerSelect.value = next;
+      }
+      if (persist) persistConfig();
+    }
+
+    function setOpenRouterApiKey(apiKey, { persist = true } = {}) {
+      state.openRouterApiKey = String(apiKey || "").trim();
+      if (els.openRouterKeyInput) {
+        els.openRouterKeyInput.value = state.openRouterApiKey;
+      }
+      if (persist) persistConfig();
+    }
+
+    function getOpenRouterHeaders() {
+      const headers = { Accept: "application/json" };
+      if (state.openRouterApiKey) {
+        headers.Authorization = `Bearer ${state.openRouterApiKey}`;
+      }
+      return headers;
     }
 
     function escapeHtml(value) {
@@ -598,7 +700,7 @@
       });
     }
 
-    async function loadModels({ silent = false } = {}) {
+    async function loadLocalModels({ silent = false } = {}) {
       state.baseUrl = els.baseUrlInput.value.trim();
       persistConfig();
       if (els.modelSelectRoot) els.modelSelectRoot.classList.add("is-loading");
@@ -610,6 +712,7 @@
           ? payload.data
               .map((item) => item?.id || item?.name || item?.model || "")
               .filter((name) => Boolean(name) && !isEmbeddingsModel(name))
+              .map((name) => ({ id: name, label: name, meta: "LM Studio" }))
           : [];
         if (els.modelSelectRoot) els.modelSelectRoot.classList.remove("is-loading");
         if (!models.length) {
@@ -618,8 +721,9 @@
           return;
         }
         renderModelOptions(models, { emptyLabel: "未加载到模型" });
-        const next = models.includes(state.model) ? state.model : models[0];
-        setSelectedModel(next, next);
+        const remembered = state.selectedModelByProvider.lmstudio || state.model;
+        const next = models.find((item) => item.id === remembered) || models[0];
+        setSelectedModel(next.id, next.label);
         setConnectionStatus("connected");
       } catch (error) {
         if (els.modelSelectRoot) els.modelSelectRoot.classList.remove("is-loading");
@@ -629,26 +733,78 @@
       }
     }
 
-    async function callLmStudio(baseUrl, model, imageDataUrl, prompt, onDelta = () => {}) {
-      const response = await fetch(normalizeBaseUrl(baseUrl) + "/v1/chat/completions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "Accept": "text/event-stream" },
-        body: JSON.stringify({
-          model, temperature: 0.1, stream: true,
-          messages: [
-            { role: "system", content: "只输出格式化 JSON 数组，2 空格缩进，禁止 markdown、解释和代码块。" },
-            {
-              role: "user",
-              content: [
-                { type: "text", text: "提取图片中的材料检测表，输出格式化 JSON 数组。每条记录只保留：型号、批次、测试温度、熔指、拉伸强度[Mpa]、断裂伸长率[%]、弯曲强度[Mpa]、弯曲模量[Mpa]、冲击强度[Mpa]。基础字段输出字符串，测量字段输出数组，数组和对象都保持多行缩进。" },
-                { type: "image_url", image_url: { url: imageDataUrl } }
-              ]
-            }
+    async function loadOpenRouterModels({ silent = false } = {}) {
+      if (els.modelSelectRoot) els.modelSelectRoot.classList.add("is-loading");
+      try {
+        const response = await fetch("https://openrouter.ai/api/v1/models?output_modalities=text", {
+          headers: getOpenRouterHeaders()
+        });
+        if (!response.ok) throw new Error(`状态码 ${response.status}`);
+        const payload = await response.json();
+        const models = Array.isArray(payload.data)
+          ? payload.data
+              .filter((item) => isOpenRouterVisionModel(item))
+              .filter((item) => !isOpenRouterAutoModel(item))
+              .filter((item) => !isOpenRouterFreeModel(item))
+              .map(normalizeOpenRouterModel)
+          : [];
+        if (els.modelSelectRoot) els.modelSelectRoot.classList.remove("is-loading");
+        if (!models.length) {
+          renderModelOptions([], { emptyLabel: "未找到可分析图片的 OpenRouter 模型" });
+          setConnectionStatus("connected");
+          return;
+        }
+        models.sort((left, right) => {
+          if (left.sortPrice !== right.sortPrice) return left.sortPrice - right.sortPrice;
+          return left.label.localeCompare(right.label, "zh-Hans-CN");
+        });
+        renderModelOptions(models, { emptyLabel: "未找到可分析图片的 OpenRouter 模型" });
+        const remembered = state.selectedModelByProvider.openrouter || state.model;
+        const next = models.find((item) => item.id === remembered) || models[0];
+        setSelectedModel(next.id, next.label);
+        setConnectionStatus("connected");
+      } catch (error) {
+        if (els.modelSelectRoot) els.modelSelectRoot.classList.remove("is-loading");
+        renderModelOptions([], { emptyLabel: "未找到可分析图片的 OpenRouter 模型" });
+        setConnectionStatus("error");
+        if (!silent) setOutput("加载 OpenRouter 模型失败:\n\n" + (error.message || String(error)));
+      }
+    }
+
+    async function loadModels({ silent = false } = {}) {
+      if (state.provider === "openrouter") {
+        await loadOpenRouterModels({ silent });
+        return;
+      }
+      await loadLocalModels({ silent });
+    }
+
+    function buildImageRecognitionMessages(imageDataUrl) {
+      return [
+        { role: "system", content: "只输出格式化 JSON 数组，2 空格缩进，禁止 markdown、解释和代码块。" },
+        {
+          role: "user",
+          content: [
+            { type: "text", text: "提取图片中的材料检测表，输出格式化 JSON 数组。每条记录只保留：型号、批次、测试温度、熔指、拉伸强度[Mpa]、断裂伸长率[%]、弯曲强度[Mpa]、弯曲模量[Mpa]、冲击强度[Mpa]。基础字段输出字符串，测量字段输出数组，数组和对象都保持多行缩进。" },
+            { type: "image_url", image_url: { url: imageDataUrl } }
           ]
+        }
+      ];
+    }
+
+    async function callStreamingChatCompletion(endpoint, headers, model, imageDataUrl, providerName, onDelta = () => {}) {
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Accept": "text/event-stream", ...headers },
+        body: JSON.stringify({
+          model,
+          temperature: 0.1,
+          stream: true,
+          messages: buildImageRecognitionMessages(imageDataUrl)
         })
       });
 
-      if (!response.ok) throw new Error(`LM Studio 调用失败 (${response.status})\n${await response.text()}`);
+      if (!response.ok) throw new Error(`${providerName} 调用失败 (${response.status})\n${await response.text()}`);
 
       const reader = response.body?.getReader();
       if (!reader) {
@@ -690,8 +846,35 @@
       return fullText;
     }
 
+    async function callLmStudio(baseUrl, model, imageDataUrl, onDelta = () => {}) {
+      return callStreamingChatCompletion(
+        normalizeBaseUrl(baseUrl) + "/v1/chat/completions",
+        {},
+        model,
+        imageDataUrl,
+        "LM Studio",
+        onDelta
+      );
+    }
+
+    async function callOpenRouter(model, imageDataUrl, onDelta = () => {}) {
+      if (!state.openRouterApiKey) {
+        throw new Error("请先填写 OpenRouter API Key");
+      }
+      return callStreamingChatCompletion(
+        "https://openrouter.ai/api/v1/chat/completions",
+        getOpenRouterHeaders(),
+        model,
+        imageDataUrl,
+        "OpenRouter",
+        onDelta
+      );
+    }
+
     async function recognizeImage() {
       state.baseUrl = els.baseUrlInput.value.trim();
+      state.provider = normalizeProvider(els.providerSelect?.value || state.provider);
+      state.openRouterApiKey = els.openRouterKeyInput?.value.trim() || state.openRouterApiKey;
       state.model = els.modelSelect.value.trim();
       persistConfig();
       if (!state.imageDataUrl) { setOutput("请先选择图片。"); return; }
@@ -700,7 +883,9 @@
       setRecognizing(true);
       setOutput("开始识别...\n");
       try {
-        const rawText = await callLmStudio(state.baseUrl, state.model, state.imageDataUrl, "", (text) => setOutput(text));
+        const rawText = state.provider === "openrouter"
+          ? await callOpenRouter(state.model, state.imageDataUrl, (text) => setOutput(text))
+          : await callLmStudio(state.baseUrl, state.model, state.imageDataUrl, (text) => setOutput(text));
         state.rawText = rawText;
         state.parsedRecords = parseModelJson(rawText);
         renderTable(state.parsedRecords);
@@ -725,6 +910,20 @@
     }
 
     function bindEvents() {
+      els.providerSelect.addEventListener("change", async (event) => {
+        setProvider(event.target.value, { persist: true });
+        await loadModels({ silent: false });
+      });
+
+      els.baseUrlInput.addEventListener("change", () => {
+        state.baseUrl = els.baseUrlInput.value.trim();
+        persistConfig();
+      });
+
+      els.openRouterKeyInput.addEventListener("input", () => {
+        setOpenRouterApiKey(els.openRouterKeyInput.value, { persist: true });
+      });
+
       els.checkConnectionBtn.addEventListener("click", () => loadModels({ silent: false }));
       els.recognizeBtn.addEventListener("click", recognizeImage);
       els.clearBtn.addEventListener("click", clearAll);
@@ -739,7 +938,7 @@
       els.modelSelectMenu.addEventListener("click", (event) => {
         const button = event.target.closest(".model-select-option");
         if (!button) return;
-        setSelectedModel(button.dataset.value || "", button.textContent || button.dataset.value || "");
+        setSelectedModel(button.dataset.value || "", button.dataset.label || button.dataset.value || "");
         closeModelSelect();
       });
 
@@ -785,9 +984,13 @@
 
     function init() {
       els.baseUrlInput.value = state.baseUrl;
+      setProvider(state.provider, { persist: false });
+      setOpenRouterApiKey(state.openRouterApiKey, { persist: false });
+      state.model = state.selectedModelByProvider[state.provider] || state.model || localStorage.getItem(STORAGE_KEYS.model) || "";
       setModelSelectLabel(state.model || "请先检测连接以加载模型列表");
       if (els.modelSelect) els.modelSelect.value = state.model || "";
       bindEvents();
+      setSelectedModel(state.model || "", state.model || "请先检测连接以加载模型列表", { persist: false });
       loadModels({ silent: true });
       syncImagePreviewPanels();
       renderEmptyTable("识别成功后，这里会按专业表格格式显示 JSON 数据。");

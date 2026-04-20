@@ -117,6 +117,7 @@
       connectionStatusBtn: document.getElementById("connectionStatusBtn"),
       imageInput: document.getElementById("imageInput"),
       recognizeBtn: document.getElementById("recognizeBtn"),
+      copyTableBtn: document.getElementById("copyTableBtn"),
       clearBtn: document.getElementById("clearBtn"),
       previewBox: document.getElementById("previewBox"),
       comparePreviewBox: document.getElementById("comparePreviewBox"),
@@ -222,6 +223,13 @@
         meta: getOpenRouterPriceLabel(model),
         sortPrice
       };
+    }
+
+    function getOpenRouterProviderRank(model) {
+      const id = String(model?.id || "").toLowerCase();
+      const label = String(model?.label || model?.name || "").toLowerCase();
+      if (id.includes("qwen") || label.includes("qwen")) return 0;
+      return 1;
     }
 
     function renderModelOptions(models, { emptyLabel = "未加载到模型" } = {}) {
@@ -527,7 +535,18 @@
         const canonicalKey = resolveCanonicalFieldName(key);
         normalized[canonicalKey] = mergeFieldValue(normalized[canonicalKey], value);
       });
+      if (Object.prototype.hasOwnProperty.call(normalized, "型号")) {
+        normalized["型号"] = normalizeModelValue(normalized["型号"]);
+      }
       return normalized;
+    }
+
+    function normalizeModelValue(value) {
+      const text = String(value ?? "").trim();
+      if (!text) return "";
+      return text
+        .replace(/^(310|320|420|520)6/, "$1G")
+        .replace(/-13/g, "-B");
     }
 
     function normalizeRecordTypes(record) {
@@ -541,6 +560,46 @@
         if (!shouldBeArray && Array.isArray(value)) { output[key] = String(value[0] ?? ""); }
       });
       return output;
+    }
+
+    function extractModelCandidates(rawText) {
+      const tokens = String(rawText || "")
+        .split(/[\s,，;；:：|/\\()\[\]{}<>]+/)
+        .map((token) => token.trim())
+        .filter(Boolean);
+      const candidates = tokens
+        .filter((token) => /^(?:310|320|420|520)/.test(token))
+        .map((token) => normalizeModelValue(token))
+        .filter(Boolean);
+      return [...new Set(candidates)];
+    }
+
+    function expandSingleRecordByModelCandidates(rawText, records) {
+      if (!Array.isArray(records) || records.length !== 1) return records;
+      const candidates = extractModelCandidates(rawText);
+      if (candidates.length <= 1) return records;
+
+      const source = records[0];
+      const arrayKeys = Object.entries(source)
+        .filter(([key, value]) => key !== "型号" && Array.isArray(value))
+        .map(([key]) => key);
+      const maxRows = Math.max(candidates.length, ...arrayKeys.map((key) => source[key].length));
+      return candidates.map((model, index) => {
+        const cloned = {};
+        Object.entries(source).forEach(([key, value]) => {
+          if (key === "型号") {
+            cloned[key] = model;
+            return;
+          }
+          if (Array.isArray(value)) {
+            cloned[key] = value[index] != null ? value[index] : value[Math.min(value.length - 1, index)] ?? "";
+            return;
+          }
+          cloned[key] = value;
+        });
+        cloned["型号"] = normalizeModelValue(cloned["型号"]);
+        return normalizeRecordTypes(cloned);
+      }).slice(0, maxRows);
     }
 
     function extractJsonCandidate(rawText) {
@@ -557,7 +616,8 @@
       const candidate = extractJsonCandidate(rawText);
       let parsed = JSON.parse(candidate);
       if (!Array.isArray(parsed)) parsed = [parsed];
-      return parsed.map((record) => normalizeRecord(record)).map((record) => normalizeRecordTypes(record));
+      const normalized = parsed.map((record) => normalizeRecord(record)).map((record) => normalizeRecordTypes(record));
+      return expandSingleRecordByModelCandidates(rawText, normalized);
     }
 
     function toSeries(value) {
@@ -569,6 +629,266 @@
     function formatCell(value) {
       const text = String(value ?? "").trim();
       return text ? text : "—";
+    }
+
+    function getEditorDisplayValue(value) {
+      const text = String(value ?? "").trim();
+      return text || "—";
+    }
+
+    function isTableCellEditor(target) {
+      return target instanceof HTMLElement && target.classList.contains("table-cell-editor");
+    }
+
+    function setTableCellValue(recordIndex, key, value, arrayIndex = null) {
+      const record = state.parsedRecords[recordIndex];
+      if (!record) return;
+      const nextValue = key === "型号" ? normalizeModelValue(value) : String(value ?? "").trim();
+
+      if (arrayIndex == null) {
+        record[key] = nextValue;
+        return;
+      }
+
+      if (!Array.isArray(record[key])) {
+        record[key] = [];
+      }
+      const target = record[key];
+      while (target.length <= arrayIndex) {
+        target.push("");
+      }
+      target[arrayIndex] = nextValue;
+    }
+
+    function syncEditedJsonOutput() {
+      try {
+        setOutput(JSON.stringify(state.parsedRecords, null, 2));
+      } catch {
+        setOutput("当前表格内容无法序列化为 JSON。");
+      }
+    }
+
+    function escapeClipboardHtml(value) {
+      return String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#39;");
+    }
+
+    function getClipboardCellStyle(className, kind = "body") {
+      const palette = {
+        "group-basic": "background:#efefef;font-weight:700;",
+        "group-melt": "background:#dbe7cf;font-weight:500;",
+        "group-tensile": "background:#f4dccb;",
+        "group-elongation": "background:#f4dccb;",
+        "group-flexural": "background:#f6ebbf;font-weight:500;",
+        "group-modulus": "background:#f6ebbf;font-weight:500;",
+        "group-impact": "background:#b5c3e0;font-weight:500;",
+        "group-extra": "background:#edf1f6;"
+      };
+      if (kind === "header") {
+        return "background:#bfd4e4;font-weight:700;text-align:center;border:1px solid #6f8aa3;padding:8px 6px;white-space:nowrap;";
+      }
+      return `${palette[className] || palette["group-extra"]}border:1px solid #3e4a57;padding:6px 6px;text-align:center;vertical-align:middle;font-variant-numeric:tabular-nums;`;
+    }
+
+    function buildTableExportMatrix(records) {
+      const columns = getOrderedColumns(records);
+      const seriesColumns = getSeriesColumns(records, columns);
+      const scalarColumns = columns.filter((key) => !seriesColumns.includes(key));
+      const impactColumnCount = getImpactColumnCount(records, seriesColumns);
+      const visibleSeriesColumns = seriesColumns.flatMap((key) => {
+        if (key !== "冲击强度[Mpa]") return [key];
+        return Array.from({ length: impactColumnCount }, (_, index) => ({ key, partIndex: index }));
+      });
+      const headers = [
+        ...scalarColumns,
+        ...visibleSeriesColumns.map((column) => (typeof column === "string" ? column : column.key))
+      ];
+
+      const rows = [];
+      records.forEach((record) => {
+        const rowCount = getRowCount(record, seriesColumns);
+        Array.from({ length: rowCount }, (_, rowIndex) => {
+          const row = [];
+          scalarColumns.forEach((key) => {
+            row.push(formatCell(record[key]) === "—" ? "" : String(record[key] ?? ""));
+          });
+          visibleSeriesColumns.forEach((column) => {
+            const key = typeof column === "string" ? column : column.key;
+            const series = toSeries(record[key]);
+            let rawValue = "";
+            if (typeof column === "string") {
+              rawValue = series[rowIndex] ?? "";
+            } else {
+              const startIdx = column.partIndex * rowCount;
+              rawValue = series[startIdx + rowIndex] ?? "";
+            }
+            row.push(String(rawValue ?? ""));
+          });
+          rows.push(row);
+        });
+      });
+
+      return { headers, rows };
+    }
+
+    function buildClipboardPlainText(records) {
+      const columns = getOrderedColumns(records);
+      const seriesColumns = getSeriesColumns(records, columns);
+      const scalarColumns = columns.filter((key) => !seriesColumns.includes(key));
+      const impactColumnCount = getImpactColumnCount(records, seriesColumns);
+      const visibleSeriesColumns = seriesColumns.flatMap((key) => {
+        if (key !== "冲击强度[Mpa]") return [key];
+        return Array.from({ length: impactColumnCount }, (_, index) => ({ key, partIndex: index }));
+      });
+      const rows = [];
+
+      records.forEach((record) => {
+        const rowCount = getRowCount(record, seriesColumns);
+        Array.from({ length: rowCount }, (_, rowIndex) => {
+          const row = [];
+          scalarColumns.forEach((key) => {
+            row.push(formatCell(record[key]) === "—" ? "" : String(record[key] ?? ""));
+          });
+          visibleSeriesColumns.forEach((column) => {
+            const key = typeof column === "string" ? column : column.key;
+            const series = toSeries(record[key]);
+            let rawValue = "";
+            if (typeof column === "string") {
+              rawValue = series[rowIndex] ?? "";
+            } else {
+              const startIdx = column.partIndex * rowCount;
+              rawValue = series[startIdx + rowIndex] ?? "";
+            }
+            row.push(String(rawValue ?? ""));
+          });
+          rows.push(row);
+        });
+      });
+
+      const sanitize = (value) => String(value ?? "").replace(/\r?\n/g, " ").replace(/\t/g, " ");
+      return rows
+        .map((row) => row.map(sanitize).join("\t"))
+        .join("\n");
+    }
+
+    function buildClipboardHtml(records) {
+      const columns = getOrderedColumns(records);
+      const seriesColumns = getSeriesColumns(records, columns);
+      const scalarColumns = columns.filter((key) => !seriesColumns.includes(key));
+      const mergedScalarColumns = scalarColumns.slice(0, 3);
+      const repeatedScalarColumns = scalarColumns.slice(3);
+      const impactColumnCount = getImpactColumnCount(records, seriesColumns);
+      const visibleSeriesColumns = seriesColumns.flatMap((key) => {
+        if (key !== "冲击强度[Mpa]") return [key];
+        return Array.from({ length: impactColumnCount }, (_, index) => ({ key, partIndex: index }));
+      });
+      const body = records.map((record) => {
+        const rowCount = getRowCount(record, seriesColumns);
+        return Array.from({ length: rowCount }, (_, rowIndex) => {
+          const cells = [];
+          mergedScalarColumns.forEach((key) => {
+            if (rowIndex > 0) return;
+            const className = getColumnClassName(key);
+            const value = formatCell(record[key]);
+            cells.push(`<td rowspan="${rowCount}" style="${getClipboardCellStyle(className)}">${escapeClipboardHtml(value)}</td>`);
+          });
+          repeatedScalarColumns.forEach((key) => {
+            const className = getColumnClassName(key);
+            const value = formatCell(record[key]);
+            cells.push(`<td style="${getClipboardCellStyle(className)}">${escapeClipboardHtml(value)}</td>`);
+          });
+          visibleSeriesColumns.forEach((column) => {
+            const key = typeof column === "string" ? column : column.key;
+            const className = getColumnClassName(key);
+            const series = toSeries(record[key]);
+            let rawValue = "";
+            if (typeof column === "string") {
+              rawValue = series[rowIndex] ?? "";
+            } else {
+              const startIdx = column.partIndex * rowCount;
+              rawValue = series[startIdx + rowIndex] ?? "";
+            }
+            const value = formatCell(rawValue);
+            cells.push(`<td style="${getClipboardCellStyle(className)}">${escapeClipboardHtml(value)}</td>`);
+          });
+          return `<tr>${cells.join("")}</tr>`;
+        }).join("");
+      }).join("");
+
+      return `<table style="border-collapse:collapse;table-layout:fixed;"><tbody>${body}</tbody></table>`;
+    }
+
+    async function copyTableToClipboard() {
+      if (!state.parsedRecords.length) {
+        setOutput("没有可复制的表格内容。");
+        return;
+      }
+      const activeEditor = document.activeElement;
+      if (isTableCellEditor(activeEditor)) {
+        commitTableCellEditor(activeEditor);
+        activeEditor.blur();
+      }
+      const plainText = buildClipboardPlainText(state.parsedRecords);
+      const htmlText = buildClipboardHtml(state.parsedRecords);
+      try {
+        if (navigator.clipboard && window.ClipboardItem) {
+          const item = new ClipboardItem({
+            "text/plain": new Blob([plainText], { type: "text/plain" }),
+            "text/html": new Blob([htmlText], { type: "text/html" })
+          });
+          await navigator.clipboard.write([item]);
+        } else if (navigator.clipboard?.writeText) {
+          await navigator.clipboard.writeText(plainText);
+        } else {
+          const textarea = document.createElement("textarea");
+          textarea.value = plainText;
+          textarea.style.position = "fixed";
+          textarea.style.opacity = "0";
+          document.body.appendChild(textarea);
+          textarea.select();
+          document.execCommand("copy");
+          textarea.remove();
+        }
+        setOutput("表格已复制到剪贴板。");
+      } catch (error) {
+        setOutput("复制失败:\n\n" + (error.message || String(error)));
+      }
+    }
+
+    function commitTableCellEditor(editor) {
+      const recordIndex = Number(editor.dataset.recordIndex);
+      const key = editor.dataset.key || "";
+      const arrayIndex = editor.dataset.arrayIndex != null && editor.dataset.arrayIndex !== ""
+        ? Number(editor.dataset.arrayIndex)
+        : null;
+      const rawValue = editor.textContent || "";
+      const normalized = rawValue.trim() === "—" ? "" : rawValue.trim();
+      const nextValue = key === "型号" ? normalizeModelValue(normalized) : normalized;
+      editor.textContent = nextValue ? nextValue : "—";
+      editor.classList.toggle("is-empty", !nextValue);
+      if (Number.isInteger(recordIndex) && key) {
+        setTableCellValue(recordIndex, key, nextValue, Number.isInteger(arrayIndex) ? arrayIndex : null);
+        syncEditedJsonOutput();
+      }
+    }
+
+    function clearEditorPlaceholder(editor) {
+      if (!isTableCellEditor(editor)) return;
+      if (editor.textContent.trim() === "—") {
+        editor.textContent = "";
+        editor.classList.remove("is-empty");
+      }
+    }
+
+    function normalizeEditorPaste(event) {
+      if (!isTableCellEditor(event.target)) return;
+      event.preventDefault();
+      const text = event.clipboardData?.getData("text/plain") || "";
+      document.execCommand("insertText", false, text);
     }
 
     function getColumnClassName(key) {
@@ -618,6 +938,7 @@
           <div class="empty-icon">📋</div>
           <div class="empty-text">${escapeHtml(message)}</div>
         </div>`;
+      refreshCopyButtonState();
       scheduleRightPaneLayoutSync();
     }
 
@@ -660,7 +981,16 @@
             if (rowIndex > 0) return;
             const value = formatCell(record[key]);
             const emptyClass = value === "—" ? " empty-cell" : "";
-            cells.push(`<td class="${getColumnClassName(key)}" rowspan="${rowCount}"><span class="${emptyClass.trim()}">${escapeHtml(value)}</span></td>`);
+            cells.push(`<td class="${getColumnClassName(key)}" rowspan="${rowCount}">
+              <span
+                class="table-cell-editor ${emptyClass.trim() ? "is-empty" : ""}"
+                contenteditable="true"
+                spellcheck="false"
+                role="textbox"
+                aria-label="${escapeHtml(key)}"
+                data-record-index="${recordIndex}"
+                data-key="${escapeHtml(key)}">${escapeHtml(getEditorDisplayValue(record[key]))}</span>
+            </td>`);
           });
           visibleSeriesColumns.forEach((column) => {
             const key = typeof column === "string" ? column : column.key;
@@ -675,7 +1005,18 @@
             }
             const value = formatCell(rawValue);
             const emptyClass = value === "—" ? " empty-cell" : "";
-            cells.push(`<td class="${className}"><span class="${emptyClass.trim()}">${escapeHtml(value)}</span></td>`);
+            const arrayIndex = typeof column === "string" ? rowIndex : column.partIndex * rowCount + rowIndex;
+            cells.push(`<td class="${className}">
+              <span
+                class="table-cell-editor ${emptyClass.trim() ? "is-empty" : ""}"
+                contenteditable="true"
+                spellcheck="false"
+                role="textbox"
+                aria-label="${escapeHtml(key)}"
+                data-record-index="${recordIndex}"
+                data-key="${escapeHtml(key)}"
+                data-array-index="${arrayIndex}">${escapeHtml(getEditorDisplayValue(rawValue))}</span>
+            </td>`);
           });
           return `<tr class="${rowClass}">${cells.join("")}</tr>`;
         }).join("");
@@ -688,6 +1029,7 @@
             <tbody>${body}</tbody>
           </table>
         </div>`;
+      refreshCopyButtonState();
       scheduleRightPaneLayoutSync();
     }
 
@@ -755,6 +1097,9 @@
           return;
         }
         models.sort((left, right) => {
+          const leftRank = getOpenRouterProviderRank(left);
+          const rightRank = getOpenRouterProviderRank(right);
+          if (leftRank !== rightRank) return leftRank - rightRank;
           if (left.sortPrice !== right.sortPrice) return left.sortPrice - right.sortPrice;
           return left.label.localeCompare(right.label, "zh-Hans-CN");
         });
@@ -781,11 +1126,19 @@
 
     function buildImageRecognitionMessages(imageDataUrl) {
       return [
-        { role: "system", content: "只输出格式化 JSON 数组，2 空格缩进，禁止 markdown、解释和代码块。" },
+        {
+          role: "system",
+          content: [
+            "只输出格式化 JSON 数组，2 空格缩进，禁止 markdown、解释和代码块。",
+            "严格保留原始字符，不要把字母 B 误识别成 13，不要把字母 G 误识别成 6。",
+            "测试温度字段只能输出 250°、260°、275° 这三种格式之一，必须是数字加中文角度符号，不要写成 250、250C、250℃ 或其它变体。",
+            "如果温度看不清，优先根据同一张表的上下文判断；实在无法判断就留空，不要瞎猜。"
+          ].join(" ")
+        },
         {
           role: "user",
           content: [
-            { type: "text", text: "提取图片中的材料检测表，输出格式化 JSON 数组。每条记录只保留：型号、批次、测试温度、熔指、拉伸强度[Mpa]、断裂伸长率[%]、弯曲强度[Mpa]、弯曲模量[Mpa]、冲击强度[Mpa]。基础字段输出字符串，测量字段输出数组，数组和对象都保持多行缩进。" },
+            { type: "text", text: "提取图片中的材料检测表，输出格式化 JSON 数组。每条记录只保留：型号、批次、测试温度、熔指、拉伸强度[Mpa]、断裂伸长率[%]、弯曲强度[Mpa]、弯曲模量[Mpa]、冲击强度[Mpa]。型号中的字母 B、G、I、S、O、Z 必须保持字母，不要和数字混淆；遇到模糊字符时不要强行替换。测试温度只能输出 250°、260°、275° 之一。基础字段输出字符串，测量字段输出数组，数组和对象都保持多行缩进。" },
             { type: "image_url", image_url: { url: imageDataUrl } }
           ]
         }
@@ -907,9 +1260,32 @@
       syncImagePreviewPanels();
       renderEmptyTable("识别成功后，这里会按专业表格格式显示 JSON 数据。");
       setOutput("等待识别结果。");
+      refreshCopyButtonState();
+    }
+
+    function ensureCopyTableButton() {
+      if (els.copyTableBtn) return els.copyTableBtn;
+      if (!els.recognizeBtn || !els.clearBtn) return null;
+      const parent = els.recognizeBtn.parentElement;
+      if (!parent) return null;
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "btn-secondary";
+      button.id = "copyTableBtn";
+      button.textContent = "一键复制";
+      parent.insertBefore(button, els.clearBtn);
+      els.copyTableBtn = button;
+      return button;
+    }
+
+    function refreshCopyButtonState() {
+      const button = els.copyTableBtn || ensureCopyTableButton();
+      if (!button) return;
+      button.disabled = !state.parsedRecords.length;
     }
 
     function bindEvents() {
+      ensureCopyTableButton();
       els.providerSelect.addEventListener("change", async (event) => {
         setProvider(event.target.value, { persist: true });
         await loadModels({ silent: false });
@@ -926,8 +1302,25 @@
 
       els.checkConnectionBtn.addEventListener("click", () => loadModels({ silent: false }));
       els.recognizeBtn.addEventListener("click", recognizeImage);
+      els.copyTableBtn?.addEventListener("click", copyTableToClipboard);
       els.clearBtn.addEventListener("click", clearAll);
       bindCompareViewerEvents();
+      els.tableSection.addEventListener("focusin", (event) => {
+        clearEditorPlaceholder(event.target);
+      });
+      els.tableSection.addEventListener("focusout", (event) => {
+        if (isTableCellEditor(event.target)) {
+          commitTableCellEditor(event.target);
+        }
+      });
+      els.tableSection.addEventListener("keydown", (event) => {
+        if (!isTableCellEditor(event.target)) return;
+        if (event.key === "Enter") {
+          event.preventDefault();
+          event.target.blur();
+        }
+      });
+      els.tableSection.addEventListener("paste", normalizeEditorPaste);
       els.modelSelectTrigger.addEventListener("click", (event) => {
         event.preventDefault();
         if (els.modelSelectRoot?.classList.contains("is-loading")) return;
@@ -995,6 +1388,7 @@
       syncImagePreviewPanels();
       renderEmptyTable("识别成功后，这里会按专业表格格式显示 JSON 数据。");
       setOutput("等待识别结果。");
+      refreshCopyButtonState();
       scheduleRightPaneLayoutSync();
     }
 

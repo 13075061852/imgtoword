@@ -52,7 +52,8 @@
       model: "lmstudio-doc-workbench-model",
       provider: "lmstudio-doc-workbench-provider",
       openRouterApiKey: "lmstudio-doc-workbench-openrouter-api-key",
-      selectedModelByProvider: "lmstudio-doc-workbench-selected-model-by-provider"
+      selectedModelByProvider: "lmstudio-doc-workbench-selected-model-by-provider",
+      recognitionSnapshot: "lmstudio-doc-workbench-recognition-snapshot"
     };
 
     const BASE_COMPARE_ZOOM = 1.1;
@@ -117,7 +118,6 @@
       connectionStatusBtn: document.getElementById("connectionStatusBtn"),
       imageInput: document.getElementById("imageInput"),
       recognizeBtn: document.getElementById("recognizeBtn"),
-      copyTableBtn: document.getElementById("copyTableBtn"),
       clearBtn: document.getElementById("clearBtn"),
       previewBox: document.getElementById("previewBox"),
       comparePreviewBox: document.getElementById("comparePreviewBox"),
@@ -446,6 +446,56 @@
       localStorage.setItem(STORAGE_KEYS.selectedModelByProvider, JSON.stringify(state.selectedModelByProvider || {}));
     }
 
+    function buildRecognitionSnapshot() {
+      const imageDataUrl = state.imageDataUrl && state.imageDataUrl.length <= 1500000 ? state.imageDataUrl : "";
+      return {
+        version: 1,
+        imageDataUrl,
+        parsedRecords: state.parsedRecords,
+        rawText: state.rawText,
+        savedAt: Date.now()
+      };
+    }
+
+    function persistRecognitionSnapshot() {
+      try {
+        if (!state.parsedRecords.length) {
+          localStorage.removeItem(STORAGE_KEYS.recognitionSnapshot);
+          return;
+        }
+        localStorage.setItem(STORAGE_KEYS.recognitionSnapshot, JSON.stringify(buildRecognitionSnapshot()));
+      } catch (error) {
+        console.warn("保存识别结果快照失败", error);
+      }
+    }
+
+    function restoreRecognitionSnapshot() {
+      const snapshot = readJsonStorage(STORAGE_KEYS.recognitionSnapshot, null);
+      if (!snapshot || !Array.isArray(snapshot.parsedRecords) || snapshot.parsedRecords.length === 0) {
+        return false;
+      }
+      state.imageDataUrl = typeof snapshot.imageDataUrl === "string" ? snapshot.imageDataUrl : "";
+      state.rawText = typeof snapshot.rawText === "string" ? snapshot.rawText : "";
+      state.parsedRecords = snapshot.parsedRecords;
+      syncImagePreviewPanels();
+      renderTable(state.parsedRecords);
+      if (state.rawText) {
+        setOutput(`已恢复 ${state.parsedRecords.length} 条记录\n\n` + state.rawText);
+      } else {
+        setOutput(`已恢复 ${state.parsedRecords.length} 条记录。`);
+      }
+      refreshCopyButtonState();
+      return true;
+    }
+
+    function clearRecognitionSnapshot() {
+      try {
+        localStorage.removeItem(STORAGE_KEYS.recognitionSnapshot);
+      } catch (error) {
+        console.warn("清理识别结果快照失败", error);
+      }
+    }
+
     function normalizeBaseUrl(url) {
       return String(url || "").trim().replace(/\/+$/, "");
     }
@@ -563,14 +613,34 @@
     }
 
     function extractModelCandidates(rawText) {
-      const tokens = String(rawText || "")
+      const text = String(rawText || "");
+      const matches = new Set();
+      const addMatch = (value) => {
+        const normalized = normalizeModelValue(value);
+        if (normalized) matches.add(normalized);
+      };
+
+      const pattern = /(?:310|320|420|520)\s*[0-9A-Za-z\-]{2,}/g;
+      for (const match of text.matchAll(pattern)) {
+        addMatch(match[0]);
+      }
+
+      const quotedPattern = /"([^"]+)"/g;
+      for (const match of text.matchAll(quotedPattern)) {
+        const content = match[1] || "";
+        const innerMatches = content.match(pattern) || [];
+        innerMatches.forEach(addMatch);
+      }
+
+      const tokens = text
         .split(/[\s,，;；:：|/\\()\[\]{}<>]+/)
         .map((token) => token.trim())
         .filter(Boolean);
-      const candidates = tokens
+      tokens
         .filter((token) => /^(?:310|320|420|520)/.test(token))
-        .map((token) => normalizeModelValue(token))
-        .filter(Boolean);
+        .forEach(addMatch);
+
+      const candidates = [...matches];
       return [...new Set(candidates)];
     }
 
@@ -647,6 +717,7 @@
 
       if (arrayIndex == null) {
         record[key] = nextValue;
+        persistRecognitionSnapshot();
         return;
       }
 
@@ -658,6 +729,7 @@
         target.push("");
       }
       target[arrayIndex] = nextValue;
+      persistRecognitionSnapshot();
     }
 
     function syncEditedJsonOutput() {
@@ -666,32 +738,6 @@
       } catch {
         setOutput("当前表格内容无法序列化为 JSON。");
       }
-    }
-
-    function escapeClipboardHtml(value) {
-      return String(value ?? "")
-        .replaceAll("&", "&amp;")
-        .replaceAll("<", "&lt;")
-        .replaceAll(">", "&gt;")
-        .replaceAll('"', "&quot;")
-        .replaceAll("'", "&#39;");
-    }
-
-    function getClipboardCellStyle(className, kind = "body") {
-      const palette = {
-        "group-basic": "background:#efefef;font-weight:700;",
-        "group-melt": "background:#dbe7cf;font-weight:500;",
-        "group-tensile": "background:#f4dccb;",
-        "group-elongation": "background:#f4dccb;",
-        "group-flexural": "background:#f6ebbf;font-weight:500;",
-        "group-modulus": "background:#f6ebbf;font-weight:500;",
-        "group-impact": "background:#b5c3e0;font-weight:500;",
-        "group-extra": "background:#edf1f6;"
-      };
-      if (kind === "header") {
-        return "background:#bfd4e4;font-weight:700;text-align:center;border:1px solid #6f8aa3;padding:8px 6px;white-space:nowrap;";
-      }
-      return `${palette[className] || palette["group-extra"]}border:1px solid #3e4a57;padding:6px 6px;text-align:center;vertical-align:middle;font-variant-numeric:tabular-nums;`;
     }
 
     function buildTableExportMatrix(records) {
@@ -713,7 +759,12 @@
         const rowCount = getRowCount(record, seriesColumns);
         Array.from({ length: rowCount }, (_, rowIndex) => {
           const row = [];
-          scalarColumns.forEach((key) => {
+          scalarColumns.forEach((key, scalarIndex) => {
+            const mergeLeadingScalar = scalarIndex < 3 && rowIndex > 0;
+            if (mergeLeadingScalar) {
+              row.push("");
+              return;
+            }
             row.push(formatCell(record[key]) === "—" ? "" : String(record[key] ?? ""));
           });
           visibleSeriesColumns.forEach((column) => {
@@ -736,94 +787,31 @@
     }
 
     function buildClipboardPlainText(records) {
-      const columns = getOrderedColumns(records);
-      const seriesColumns = getSeriesColumns(records, columns);
-      const scalarColumns = columns.filter((key) => !seriesColumns.includes(key));
-      const impactColumnCount = getImpactColumnCount(records, seriesColumns);
-      const visibleSeriesColumns = seriesColumns.flatMap((key) => {
-        if (key !== "冲击强度[Mpa]") return [key];
-        return Array.from({ length: impactColumnCount }, (_, index) => ({ key, partIndex: index }));
-      });
-      const rows = [];
-
-      records.forEach((record) => {
-        const rowCount = getRowCount(record, seriesColumns);
-        Array.from({ length: rowCount }, (_, rowIndex) => {
-          const row = [];
-          scalarColumns.forEach((key) => {
-            row.push(formatCell(record[key]) === "—" ? "" : String(record[key] ?? ""));
-          });
-          visibleSeriesColumns.forEach((column) => {
-            const key = typeof column === "string" ? column : column.key;
-            const series = toSeries(record[key]);
-            let rawValue = "";
-            if (typeof column === "string") {
-              rawValue = series[rowIndex] ?? "";
-            } else {
-              const startIdx = column.partIndex * rowCount;
-              rawValue = series[startIdx + rowIndex] ?? "";
-            }
-            row.push(String(rawValue ?? ""));
-          });
-          rows.push(row);
-        });
-      });
-
+      const { rows } = buildTableExportMatrix(records);
       const sanitize = (value) => String(value ?? "").replace(/\r?\n/g, " ").replace(/\t/g, " ");
       return rows
         .map((row) => row.map(sanitize).join("\t"))
-        .join("\n");
+        .join("\r\n");
     }
 
-    function buildClipboardHtml(records) {
-      const columns = getOrderedColumns(records);
-      const seriesColumns = getSeriesColumns(records, columns);
-      const scalarColumns = columns.filter((key) => !seriesColumns.includes(key));
-      const mergedScalarColumns = scalarColumns.slice(0, 3);
-      const repeatedScalarColumns = scalarColumns.slice(3);
-      const impactColumnCount = getImpactColumnCount(records, seriesColumns);
-      const visibleSeriesColumns = seriesColumns.flatMap((key) => {
-        if (key !== "冲击强度[Mpa]") return [key];
-        return Array.from({ length: impactColumnCount }, (_, index) => ({ key, partIndex: index }));
-      });
-      const body = records.map((record) => {
-        const rowCount = getRowCount(record, seriesColumns);
-        return Array.from({ length: rowCount }, (_, rowIndex) => {
-          const cells = [];
-          mergedScalarColumns.forEach((key) => {
-            if (rowIndex > 0) return;
-            const className = getColumnClassName(key);
-            const value = formatCell(record[key]);
-            cells.push(`<td rowspan="${rowCount}" style="${getClipboardCellStyle(className)}">${escapeClipboardHtml(value)}</td>`);
-          });
-          repeatedScalarColumns.forEach((key) => {
-            const className = getColumnClassName(key);
-            const value = formatCell(record[key]);
-            cells.push(`<td style="${getClipboardCellStyle(className)}">${escapeClipboardHtml(value)}</td>`);
-          });
-          visibleSeriesColumns.forEach((column) => {
-            const key = typeof column === "string" ? column : column.key;
-            const className = getColumnClassName(key);
-            const series = toSeries(record[key]);
-            let rawValue = "";
-            if (typeof column === "string") {
-              rawValue = series[rowIndex] ?? "";
-            } else {
-              const startIdx = column.partIndex * rowCount;
-              rawValue = series[startIdx + rowIndex] ?? "";
-            }
-            const value = formatCell(rawValue);
-            cells.push(`<td style="${getClipboardCellStyle(className)}">${escapeClipboardHtml(value)}</td>`);
-          });
-          return `<tr>${cells.join("")}</tr>`;
-        }).join("");
-      }).join("");
-
-      return `<table style="border-collapse:collapse;table-layout:fixed;"><tbody>${body}</tbody></table>`;
+    async function writePlainTextToClipboard(text) {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+        return;
+      }
+      const textarea = document.createElement("textarea");
+      textarea.value = text;
+      textarea.style.position = "fixed";
+      textarea.style.opacity = "0";
+      document.body.appendChild(textarea);
+      textarea.focus();
+      textarea.select();
+      document.execCommand("copy");
+      textarea.remove();
     }
 
-    async function copyTableToClipboard() {
-      if (!state.parsedRecords.length) {
+    async function copyRecordsToClipboard(records, label = "表格") {
+      if (!records.length) {
         setOutput("没有可复制的表格内容。");
         return;
       }
@@ -832,31 +820,32 @@
         commitTableCellEditor(activeEditor);
         activeEditor.blur();
       }
-      const plainText = buildClipboardPlainText(state.parsedRecords);
-      const htmlText = buildClipboardHtml(state.parsedRecords);
+      const plainText = buildClipboardPlainText(records);
       try {
         if (navigator.clipboard && window.ClipboardItem) {
           const item = new ClipboardItem({
-            "text/plain": new Blob([plainText], { type: "text/plain" }),
-            "text/html": new Blob([htmlText], { type: "text/html" })
+            "text/plain": new Blob([plainText], { type: "text/plain" })
           });
           await navigator.clipboard.write([item]);
         } else if (navigator.clipboard?.writeText) {
-          await navigator.clipboard.writeText(plainText);
+          await writePlainTextToClipboard(plainText);
         } else {
-          const textarea = document.createElement("textarea");
-          textarea.value = plainText;
-          textarea.style.position = "fixed";
-          textarea.style.opacity = "0";
-          document.body.appendChild(textarea);
-          textarea.select();
-          document.execCommand("copy");
-          textarea.remove();
+          await writePlainTextToClipboard(plainText);
         }
-        setOutput("表格已复制到剪贴板。");
+        setOutput(`${label}已复制到剪贴板。`);
       } catch (error) {
         setOutput("复制失败:\n\n" + (error.message || String(error)));
       }
+    }
+
+    async function copyRecordAtIndex(recordIndex) {
+      const record = state.parsedRecords[recordIndex];
+      if (!record) {
+        setOutput("未找到要复制的数据组。");
+        return;
+      }
+      const modelLabel = String(record["型号"] || "").trim() || `第 ${recordIndex + 1} 组`;
+      await copyRecordsToClipboard([record], `${modelLabel} `);
     }
 
     function commitTableCellEditor(editor) {
@@ -972,6 +961,13 @@
         })
       ].join("");
 
+      const toolbar = records.map((record, recordIndex) => {
+        const modelLabel = String(record["型号"] || "").trim() || `第 ${recordIndex + 1} 组`;
+        const batchLabel = String(record["批次"] || "").trim();
+        const extraLabel = batchLabel ? ` / ${batchLabel}` : "";
+        return `<button type="button" class="btn-secondary table-copy-btn" data-copy-record-index="${recordIndex}">复制 ${escapeHtml(modelLabel + extraLabel)}</button>`;
+      }).join("");
+
       const body = records.map((record, recordIndex) => {
         const rowCount = getRowCount(record, seriesColumns);
         return Array.from({ length: rowCount }, (_, rowIndex) => {
@@ -1023,6 +1019,7 @@
       }).join("");
 
       els.tableSection.innerHTML = `
+        <div class="table-toolbar">${toolbar}</div>
         <div class="table-wrap">
           <table class="report-table">
             <thead><tr>${header}</tr></thead>
@@ -1132,6 +1129,7 @@
             "只输出格式化 JSON 数组，2 空格缩进，禁止 markdown、解释和代码块。",
             "严格保留原始字符，不要把字母 B 误识别成 13，不要把字母 G 误识别成 6。",
             "测试温度字段只能输出 250°、260°、275° 这三种格式之一，必须是数字加中文角度符号，不要写成 250、250C、250℃ 或其它变体。",
+            "如果一张图片里有多个不同型号的数据块，每个数据块必须单独输出为一个 JSON 对象，不要把多个型号合并进同一个对象。",
             "如果温度看不清，优先根据同一张表的上下文判断；实在无法判断就留空，不要瞎猜。"
           ].join(" ")
         },
@@ -1242,10 +1240,12 @@
         state.rawText = rawText;
         state.parsedRecords = parseModelJson(rawText);
         renderTable(state.parsedRecords);
-        setOutput(rawText || "模型没有返回内容。");
+        persistRecognitionSnapshot();
+        setOutput(`已解析 ${state.parsedRecords.length} 条记录\n\n` + (rawText || "模型没有返回内容。"));
       } catch (error) {
         state.parsedRecords = [];
         renderEmptyTable("识别失败，暂时无法生成表格。");
+        clearRecognitionSnapshot();
         setOutput("识别失败:\n\n" + (error.message || String(error)));
       } finally {
         setRecognizing(false);
@@ -1257,35 +1257,21 @@
       state.parsedRecords = [];
       state.rawText = "";
       els.imageInput.value = "";
+      clearRecognitionSnapshot();
       syncImagePreviewPanels();
       renderEmptyTable("识别成功后，这里会按专业表格格式显示 JSON 数据。");
       setOutput("等待识别结果。");
       refreshCopyButtonState();
     }
 
-    function ensureCopyTableButton() {
-      if (els.copyTableBtn) return els.copyTableBtn;
-      if (!els.recognizeBtn || !els.clearBtn) return null;
-      const parent = els.recognizeBtn.parentElement;
-      if (!parent) return null;
-      const button = document.createElement("button");
-      button.type = "button";
-      button.className = "btn-secondary";
-      button.id = "copyTableBtn";
-      button.textContent = "一键复制";
-      parent.insertBefore(button, els.clearBtn);
-      els.copyTableBtn = button;
-      return button;
-    }
-
     function refreshCopyButtonState() {
-      const button = els.copyTableBtn || ensureCopyTableButton();
-      if (!button) return;
-      button.disabled = !state.parsedRecords.length;
+      const buttons = els.tableSection?.querySelectorAll("[data-copy-record-index]");
+      buttons?.forEach((button) => {
+        button.disabled = !state.parsedRecords.length;
+      });
     }
 
     function bindEvents() {
-      ensureCopyTableButton();
       els.providerSelect.addEventListener("change", async (event) => {
         setProvider(event.target.value, { persist: true });
         await loadModels({ silent: false });
@@ -1302,9 +1288,15 @@
 
       els.checkConnectionBtn.addEventListener("click", () => loadModels({ silent: false }));
       els.recognizeBtn.addEventListener("click", recognizeImage);
-      els.copyTableBtn?.addEventListener("click", copyTableToClipboard);
       els.clearBtn.addEventListener("click", clearAll);
       bindCompareViewerEvents();
+      els.tableSection.addEventListener("click", async (event) => {
+        const button = event.target.closest("[data-copy-record-index]");
+        if (!button) return;
+        const recordIndex = Number(button.dataset.copyRecordIndex);
+        if (!Number.isInteger(recordIndex)) return;
+        await copyRecordAtIndex(recordIndex);
+      });
       els.tableSection.addEventListener("focusin", (event) => {
         clearEditorPlaceholder(event.target);
       });
@@ -1385,9 +1377,12 @@
       bindEvents();
       setSelectedModel(state.model || "", state.model || "请先检测连接以加载模型列表", { persist: false });
       loadModels({ silent: true });
-      syncImagePreviewPanels();
-      renderEmptyTable("识别成功后，这里会按专业表格格式显示 JSON 数据。");
-      setOutput("等待识别结果。");
+      const restored = restoreRecognitionSnapshot();
+      if (!restored) {
+        syncImagePreviewPanels();
+        renderEmptyTable("识别成功后，这里会按专业表格格式显示 JSON 数据。");
+        setOutput("等待识别结果。");
+      }
       refreshCopyButtonState();
       scheduleRightPaneLayoutSync();
     }

@@ -51,8 +51,8 @@
       overflow: hidden;
       display: flex;
       flex-direction: column;
-      gap: 12px;
-      min-height: 100vh;
+      height: 100dvh;
+      min-height: 100dvh;
     }
 
     /* ─── Layout ─── */
@@ -609,6 +609,20 @@
       overflow-y: hidden;
       background: #fff;
       box-shadow: inset 0 0 0 1px var(--table-head-border);
+    }
+
+    .table-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+
+    .table-copy-btn {
+      height: 34px;
+      padding: 0 14px;
+      font-size: 12px;
+      white-space: nowrap;
     }
 
     .report-table {

@@ -612,6 +612,21 @@
       return output;
     }
 
+    function hasMeaningfulValue(value) {
+      if (value == null) return false;
+      if (Array.isArray(value)) return value.some((item) => hasMeaningfulValue(item));
+      if (typeof value === "object") return Object.values(value).some((item) => hasMeaningfulValue(item));
+      return String(value).trim() !== "";
+    }
+
+    function isMeaningfulRecord(record) {
+      if (!record || typeof record !== "object") return false;
+      return Object.entries(record).some(([key, value]) => {
+        if (key === "型号") return hasMeaningfulValue(value);
+        return hasMeaningfulValue(value);
+      });
+    }
+
     function extractModelCandidates(rawText) {
       const text = String(rawText || "");
       const matches = new Set();
@@ -686,7 +701,10 @@
       const candidate = extractJsonCandidate(rawText);
       let parsed = JSON.parse(candidate);
       if (!Array.isArray(parsed)) parsed = [parsed];
-      const normalized = parsed.map((record) => normalizeRecord(record)).map((record) => normalizeRecordTypes(record));
+      const normalized = parsed
+        .map((record) => normalizeRecord(record))
+        .map((record) => normalizeRecordTypes(record))
+        .filter((record) => isMeaningfulRecord(record));
       return expandSingleRecordByModelCandidates(rawText, normalized);
     }
 
@@ -1138,6 +1156,8 @@
           role: "system",
           content: [
             "只输出格式化 JSON 数组，2 空格缩进，禁止 markdown、解释和代码块。",
+            "识别到几组数据就返回几组数据；某一组如果没有任何有效字段、字段全为空、全是空数组、null 或无法确认的内容，就不要输出这一组。",
+            "只保留有实际识别结果的组，不要补空组，也不要为了凑格式输出空对象。",
             "严格保留原始字符，不要把字母 B 误识别成 13，不要把字母 G 误识别成 6。",
             "测试温度字段只能输出 250°、260°、275° 这三种格式之一，必须是数字加中文角度符号，不要写成 250、250C、250℃ 或其它变体。",
             "如果一张图片里有多个不同型号的数据块，每个数据块必须单独输出为一个 JSON 对象，不要把多个型号合并进同一个对象。",
@@ -1147,7 +1167,7 @@
         {
           role: "user",
           content: [
-            { type: "text", text: "提取图片中的材料检测表，输出格式化 JSON 数组。每条记录只保留：型号、批次、测试温度、熔指、拉伸强度[Mpa]、断裂伸长率[%]、弯曲强度[Mpa]、弯曲模量[Mpa]、冲击强度[Mpa]。型号中的字母 B、G、I、S、O、Z 必须保持字母，不要和数字混淆；遇到模糊字符时不要强行替换。测试温度只能输出 250°、260°、275° 之一。基础字段输出字符串，测量字段输出数组，数组和对象都保持多行缩进。" },
+            { type: "text", text: "提取图片中的材料检测表，输出格式化 JSON 数组。识别到几组就返回几组；没有任何有效内容的组不要返回。每条记录只保留：型号、批次、测试温度、熔指、拉伸强度[Mpa]、断裂伸长率[%]、弯曲强度[Mpa]、弯曲模量[Mpa]、冲击强度[Mpa]。型号中的字母 B、G、I、S、O、Z 必须保持字母，不要和数字混淆；遇到模糊字符时不要强行替换。测试温度只能输出 250°、260°、275° 之一。基础字段输出字符串，测量字段输出数组，数组和对象都保持多行缩进。空字段可以省略，不要补空组或空对象。" },
             { type: "image_url", image_url: { url: imageDataUrl } }
           ]
         }

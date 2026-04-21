@@ -904,7 +904,7 @@
       const primaryMax = Math.max(0, ...primarySeriesColumns.map((key) => toSeries(record[key]).length));
       if (primaryMax > 0) return primaryMax;
       const impactCount = toSeries(record["冲击强度[Mpa]"]).length;
-      if (impactCount > 0) return Math.min(3, impactCount);
+      if (impactCount > 0) return impactCount;
       return 1;
     }
 
@@ -967,6 +967,8 @@
         const extraLabel = batchLabel ? ` / ${batchLabel}` : "";
         return `<button type="button" class="btn-secondary table-copy-btn" data-copy-record-index="${recordIndex}">复制 ${escapeHtml(modelLabel + extraLabel)}</button>`;
       }).join("");
+      const subtitle = `点按按钮复制单组数据，表格内容仍可直接编辑`;
+      const countLabel = `共 ${records.length} 组`;
 
       const body = records.map((record, recordIndex) => {
         const rowCount = getRowCount(record, seriesColumns);
@@ -1019,7 +1021,16 @@
       }).join("");
 
       els.tableSection.innerHTML = `
-        <div class="table-toolbar">${toolbar}</div>
+        <div class="table-meta">
+          <div class="table-meta-copy">
+            <div class="table-title-row">
+              <div class="table-title">识别结果</div>
+              <div class="table-count-pill">${escapeHtml(countLabel)}</div>
+            </div>
+            <div class="table-subtitle">${escapeHtml(subtitle)}</div>
+          </div>
+          <div class="table-toolbar">${toolbar}</div>
+        </div>
         <div class="table-wrap">
           <table class="report-table">
             <thead><tr>${header}</tr></thead>

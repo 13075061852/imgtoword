@@ -739,13 +739,12 @@
     .table-meta .btn-secondary.table-copy-btn:hover {
       background: linear-gradient(180deg, #ffffff 0%, #eef4fa 100%);
       box-shadow:
-        inset 0 0 0 1px rgba(100, 116, 139, 0.6),
-        0 6px 14px rgba(37, 99, 235, 0.08);
-      transform: translateY(-1px);
+        inset 0 0 0 1px rgba(148, 163, 184, 0.45);
+      transform: none;
     }
 
     .table-meta .btn-secondary.table-copy-btn:active:not(:disabled) {
-      transform: translateY(0);
+      transform: none;
     }
 
     .report-table {
@@ -822,7 +821,8 @@
     }
 
     .table-meta .btn-secondary.table-copy-btn:hover {
-      box-shadow: inset 0 0 0 1px #b8c8d9, 0 4px 10px rgba(37, 99, 235, 0.08);
+      box-shadow: inset 0 0 0 1px #cfd9e3;
+      transform: none;
     }
 
     .report-table td.group-basic {
